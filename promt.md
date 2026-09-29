@@ -9,7 +9,7 @@ AI bắt buộc phải tuân thủ nghiêm ngặt các công nghệ sau khi vi�
 - **Core:** React, TypeScript, Vite.
 - **UI/Styling:** Tailwind CSS.
 - **Animation:** framer-motion (đặc biệt cho hiệu ứng quẹt thẻ).
-- **Realtime:** Socket.io-client hoặc SockJS-client.
+- **Realtime:** SockJS + STOMP và Zustand
 
 ## Backend (Java Spring Boot)
 - **Core:** Java Spring Boot.
