@@ -1,3 +1,32 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #0d0905;
+    --foreground: #fdf8f3;
+    --card: #1a1108;
+    --primary: #f97316;
+    --secondary: #fbbf24;
+    --muted: #2a1d0f;
+    --border: #2a1d0f;
+    --ring: #f97316;
+    --accent: #fbbf24;
+    --radius: 0.75rem;
+  }
+
+  * { border-color: var(--border); }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
