@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Badge, Avatar, Spinner } from "./components/index.ts";
+import { Button, Badge, Avatar, Spinner, Card, PlaceCard, ListItem, Tag } from "./components/index.ts";
 import './App.css'
 
 function App() {
@@ -93,6 +93,102 @@ function App() {
             </div>
           </div>
         </section>
+
+        {/* 5. Card */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">5. Card</h2>
+          <Card 
+            title="Thông tin phòng" 
+            description="Mã phòng: ABC123"
+            footer={<div className="flex justify-end"><Button variant="ghost" size="sm">Rời phòng</Button></div>}
+          >
+            <p className="text-[#756761]">Nội dung bên trong card. Bạn có thể chèn bất kỳ nội dung nào vào đây.</p>
+          </Card>
+        </section>
+
+        {/* 6. PlaceCard */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">6. PlaceCard</h2>
+          <div className="max-w-sm">
+            <PlaceCard 
+              place={{
+                id: "1",
+                name: "Lẩu Phan",
+                category: "Lẩu",
+                price_range: 2,
+                image_url: "https://images.unsplash.com/photo-1582295528072-4d1d916cc691?auto=format&fit=crop&q=80&w=600",
+                address: "Thái Hà",
+                latitude: 0,
+                longitude: 0,
+                rating: 4.7
+              }}
+              showActions
+              onLike={() => alert("Đã thả tim!")}
+              onPass={() => alert("Đã bỏ qua!")}
+            />
+          </div>
+        </section>
+
+        {/* 7. ListItem */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">7. ListItem </h2>
+          <div className="bg-white p-4 rounded-2xl border border-[#eadfd8] space-y-4">
+            
+            {/* Dùng cho mảng Social (Phòng chờ) */}
+            <div>
+              <p className="text-xs font-bold text-[#756761] uppercase tracking-wider mb-2">Bạn Bè (Friend List)</p>
+              <ListItem 
+                title="Linh Anh"
+                subtitle="Chủ phòng"
+                isOnline
+                isReady={true}
+                avatarColor="bg-purple-500"
+              />
+              <div className="h-px bg-[#eadfd8] w-full my-2" />
+              <ListItem 
+                title="Nam Minh"
+                subtitle="Đang thèm đồ nướng"
+                isOnline
+                isReady={false}
+                action={<Button size="sm" variant="secondary">Mời</Button>}
+              />
+            </div>
+
+            {/* Dùng cho mảng Billing (Hóa đơn) */}
+            <div className="bg-[#fff8f1] p-3 rounded-xl border border-[#eadfd8]">
+              <p className="text-xs font-bold text-[#f05a32] uppercase tracking-wider mb-2">Chia Tiền (Bill Split)</p>
+              <ListItem 
+                title="Lẩu Phan Thái Hà"
+                subtitle="29 tháng 9 · 4 người"
+                avatarColor="bg-[#f05a32]"
+                avatarInitials="LP"
+                action={<span className="font-bold text-[#261b17]">+185.000đ</span>}
+              />
+              <div className="h-px bg-[#eadfd8] w-full my-2" />
+              <ListItem 
+                title="Bún chả Hương Liên"
+                subtitle="Đã thanh toán · 2 người"
+                avatarColor="bg-green-600"
+                avatarInitials="BC"
+                action={<span className="font-bold text-green-600">Đã xong</span>}
+              />
+            </div>
+
+          </div>
+        </section>
+
+        {/* 8. Tag */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">8. Tag</h2>
+          <div className="flex flex-wrap gap-3">
+            <Tag label="Lẩu" emoji="🍲" selected />
+            <Tag label="Nướng" emoji="🔥" />
+            <Tag label="Món Hàn" emoji="🍱" />
+            <Tag label="Trà sữa" emoji="🧋" selected />
+            <Tag label="Gần đây" />
+          </div>
+        </section>
+
       </div>
     </div>
   )
