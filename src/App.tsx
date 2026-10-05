@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Badge, Avatar, Spinner, Card, PlaceCard, ListItem, Tag } from "./components/index.ts";
+import { Button, Badge, Avatar, Spinner, Card, PlaceCard, ListItem, Tag, Modal, Toast, EmptyState, ProgressBar } from "./components/index.ts";
 import './App.css'
 
 function App() {
@@ -186,6 +186,61 @@ function App() {
             <Tag label="Món Hàn" emoji="🍱" />
             <Tag label="Trà sữa" emoji="🧋" selected />
             <Tag label="Gần đây" />
+          </div>
+        </section>
+
+        {/* 9. Modal */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">9. Modal</h2>
+          <Button onClick={() => setIsModalOpen(true)}>Mở Modal Test</Button>
+          
+          <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Mời bạn bè">
+            <div className="space-y-4">
+              <p className="text-[#756761] text-[15px]">Bạn có muốn gửi lời mời vào phòng ABC123 tới các bạn bè đang online không?</p>
+              <div className="flex gap-3 justify-end pt-4 mt-4 border-t border-[#eadfd8]">
+                <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Hủy</Button>
+                <Button onClick={() => setIsModalOpen(false)}>Gửi lời mời ngay</Button>
+              </div>
+            </div>
+          </Modal>
+        </section>
+
+        {/* 10. Toast */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">10. Toast</h2>
+          <div className="flex gap-4">
+            <Button variant="secondary" onClick={() => setShowToast(!showToast)}>
+              {showToast ? 'Ẩn Toast' : 'Hiện Toast Notification'}
+            </Button>
+          </div>
+          <div className="h-16 relative">
+            <Toast 
+              message="Đã copy mã phòng thành công!" 
+              type="success" 
+              isVisible={showToast} 
+              onClose={() => setShowToast(false)} 
+              className="absolute top-0 left-0"
+            />
+          </div>
+        </section>
+
+        {/* 11. EmptyState */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">11. EmptyState</h2>
+          <EmptyState 
+            title="Chưa có bạn bè nào online"
+            description="Hãy gửi mã phòng để rủ bạn bè vào quẹt thẻ chọn quán ngay nhé!"
+            icon="📭"
+            action={<Button>Copy mã phòng</Button>}
+          />
+        </section>
+
+        {/* 12. ProgressBar */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-b border-[#eadfd8] pb-2">12. ProgressBar</h2>
+          <div className="space-y-6">
+            <ProgressBar value={75} label="Tiến độ chốt quán (3/4 người đã xong)" />
+            <ProgressBar value={100} label="Đã Match!" color="bg-green-500" animated />
           </div>
         </section>
 
