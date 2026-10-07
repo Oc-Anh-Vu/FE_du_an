@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { Badge } from "./Badge";
-import { Button } from "./Button";
+import { Button } from "../form/Button";
 
 export interface Place {
   id: string;
