@@ -1,12 +1,3 @@
-export { Button } from './Button'
-export { Badge } from './Badge'
-export { Avatar } from './Avatar'
-export { Spinner } from './Spinner'
-export { Card } from './Card'
-export { PlaceCard } from './PlaceCard'
-export { ListItem } from './ListItem'
-export { Tag } from './Tag'
-export { Modal } from './Modal'
-export { Toast } from './Toast'
-export { EmptyState } from './EmptyState'
-export { ProgressBar } from './ProgressBar'
+export { Badge, Avatar, Card, PlaceCard, ListItem } from './display';
+export { Modal, Toast, EmptyState, ProgressBar, Spinner } from './feedback';
+export { Button, Tag } from './form';
