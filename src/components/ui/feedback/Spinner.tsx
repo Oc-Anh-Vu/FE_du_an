@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { cn } from "../../../utils/cn";
 
 export interface SpinnerProps extends React.SVGProps<SVGSVGElement> {
   size?: "sm" | "md" | "lg";
@@ -22,7 +23,9 @@ export const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(
     return (
       <svg
         ref={ref}
-        className={`animate-spin ${sizes[size]} ${colors[color]} ${className}`}
+        className={cn("animate-spin", sizes[size], colors[color], className)}
+        role="status"
+        aria-label="Đang tải"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
