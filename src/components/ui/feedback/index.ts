@@ -1,5 +1,10 @@
-export { Modal } from './Modal'
-export { Toast } from './Toast'
-export { EmptyState } from './EmptyState'
-export { ProgressBar } from './ProgressBar'
-export { Spinner } from './Spinner'
+export { Spinner } from "./Spinner";
+export type { SpinnerProps } from "./Spinner";
+export { ProgressBar } from "./ProgressBar";
+export type { ProgressBarProps } from "./ProgressBar";
+export { Toast } from "./Toast";
+export type { ToastProps } from "./Toast";
+export { Modal } from "./Modal";
+export type { ModalProps } from "./Modal";
+export { EmptyState } from "./EmptyState";
+export type { EmptyStateProps } from "./EmptyState";

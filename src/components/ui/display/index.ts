@@ -1,5 +1,10 @@
-export { Badge } from './Badge'
-export { Avatar } from './Avatar'
-export { Card } from './Card'
-export { PlaceCard } from './PlaceCard'
-export { ListItem } from './ListItem'
+export { Card } from "./Card";
+export type { CardProps } from "./Card";
+export { Badge } from "./Badge";
+export type { BadgeProps } from "./Badge";
+export { Avatar } from "./Avatar";
+export type { AvatarProps } from "./Avatar";
+export { ListItem } from "./ListItem";
+export type { ListItemProps } from "./ListItem";
+export { PlaceCard } from "./PlaceCard";
+export type { PlaceCardProps, Place } from "./PlaceCard";

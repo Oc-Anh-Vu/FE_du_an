@@ -1,9 +1,13 @@
 import { forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "../../../utils/cn";
 
-export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ToastProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart"
+> {
   message: string;
-  type?: "success" | "error" | "info";
+  type?: "success" | "error" | "warning" | "info";
   onClose?: () => void;
   isVisible?: boolean; // Cho phép điều khiển hiển thị
 }
@@ -13,12 +17,14 @@ export const Toast = forwardRef<HTMLDivElement, ToastProps>(
     const types = {
       success: "bg-green-100 text-green-800 border-green-200",
       error: "bg-red-100 text-red-800 border-red-200",
+      warning: "bg-yellow-100 text-yellow-800 border-yellow-200",
       info: "bg-blue-100 text-blue-800 border-blue-200",
     };
 
     const icons = {
       success: "✅",
       error: "❌",
+      warning: "⚠️",
       info: "ℹ️",
     };
 
@@ -27,10 +33,12 @@ export const Toast = forwardRef<HTMLDivElement, ToastProps>(
         {isVisible && (
           <motion.div
             ref={ref}
+            role="status"
+            aria-live="polite"
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-sm ${types[type]} ${className}`}
+            className={cn("flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-sm", types[type], className)}
             {...props}
           >
             <span>{icons[type]}</span>
