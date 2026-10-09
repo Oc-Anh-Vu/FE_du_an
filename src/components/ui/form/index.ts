@@ -1,4 +1,12 @@
-export { Button } from "./Button";
-export type { ButtonProps } from "./Button";
-export { Tag } from "./Tag";
-export type { TagProps } from "./Tag";
+export * from "./Button";
+export * from "./Tag";
+export * from "./Input";
+export * from "./PasswordInput";
+export * from "./SearchInput";
+export * from "./CurrencyInput";
+export * from "./OtpInput";
+export * from "./Checkbox";
+export * from "./Switch";
+export * from "./Slider";
+export * from "./SegmentedControl";
+export * from "./IconButton";
