@@ -9,10 +9,11 @@ export interface TagProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 }
 
 export const Tag = forwardRef<HTMLButtonElement, TagProps>(
-  ({ className = "", label, emoji, selected = false, size = "md", ...props }, ref) => {
+  ({ className = "", label, emoji, selected = false, size = "md", type = "button", ...props }, ref) => {
     return (
       <button
         ref={ref}
+        type={type}
         aria-pressed={selected}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full font-bold transition-colors border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",

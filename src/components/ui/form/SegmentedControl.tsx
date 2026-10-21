@@ -28,6 +28,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
           return (
             <button
               key={option.value}
+              type="button"
               role="radio"
               aria-checked={isActive}
               onClick={() => onChange(option.value)}
