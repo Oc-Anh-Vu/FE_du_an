@@ -1,9 +1,10 @@
 import { forwardRef, useId, useState, useEffect } from "react";
 import { cn } from "../../../utils/cn";
 
-export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'defaultValue'> {
   label?: string;
   value?: number;
+  defaultValue?: number;
   min?: number;
   max?: number;
   step?: number;
@@ -12,12 +13,11 @@ export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 export const Slider = forwardRef<HTMLInputElement, SliderProps>(
-  ({ className = "", label, value, min = 0, max = 100, step = 1, onChange, formatValue, id: externalId, ...props }, ref) => {
+  ({ className = "", label, value, defaultValue, min = 0, max = 100, step = 1, onChange, formatValue, id: externalId, ...props }, ref) => {
     const internalId = useId();
     const id = externalId || internalId;
     
-    // Controlled vs Uncontrolled
-    const [localValue, setLocalValue] = useState<number>(value ?? min);
+    const [localValue, setLocalValue] = useState<number>(() => value ?? defaultValue ?? min);
 
     useEffect(() => {
       if (value !== undefined) {
@@ -33,7 +33,8 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(
       onChange?.(newValue);
     };
 
-    const percentage = ((localValue - min) / (max - min)) * 100;
+    const range = max - min;
+    const percentage = range > 0 ? Math.min(100, Math.max(0, ((localValue - min) / range) * 100)) : 0;
 
     return (
       <div className={cn("flex flex-col gap-2 w-full", className)}>
@@ -43,7 +44,7 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(
               {label}
             </label>
           )}
-          <span className="text-[14px] font-medium text-[#f05a32]">
+          <span className="text-[14px] font-bold text-[#f05a32]">
             {formatValue ? formatValue(localValue) : localValue}
           </span>
         </div>

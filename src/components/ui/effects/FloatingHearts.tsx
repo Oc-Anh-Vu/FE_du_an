@@ -1,31 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export interface FloatingHeartsProps {
   active?: boolean;
-  count?: number; // number of hearts to spawn per trigger
+  trigger?: number;
+  count?: number;
 }
 
-export const FloatingHearts = ({ active = false, count = 1 }: FloatingHeartsProps) => {
-  const [hearts, setHearts] = useState<{ id: number; x: number; delay: number }[]>([]);
+interface HeartParticle {
+  id: string;
+  x: number;
+  yTarget: number;
+  scaleTarget: number;
+  duration: number;
+  delay: number;
+}
+
+export const FloatingHearts = ({ active = false, trigger, count = 1 }: FloatingHeartsProps) => {
+  const [hearts, setHearts] = useState<HeartParticle[]>([]);
+  const seqRef = useRef(0);
 
   useEffect(() => {
-    if (!active) return;
-    
-    const newHearts = Array.from({ length: count }).map(() => ({
-      id: Date.now() + Math.random(),
-      x: Math.random() * 80 - 40, // -40px to +40px from origin
-      delay: Math.random() * 0.2,
+    const shouldSpawn = trigger !== undefined ? trigger > 0 : active;
+    if (!shouldSpawn) return;
+
+    const batchId = `${Date.now()}-${++seqRef.current}`;
+    const newHearts: HeartParticle[] = Array.from({ length: count }).map((_, idx) => ({
+      id: `${batchId}-${idx}`,
+      x: Math.random() * 80 - 40, // -40px đến +40px từ tâm
+      yTarget: -100 - Math.random() * 70,
+      scaleTarget: 1 + Math.random() * 0.45,
+      duration: 1.15 + Math.random() * 0.45,
+      delay: Math.random() * 0.18,
     }));
-    
-    setHearts(prev => [...prev, ...newHearts]);
 
-    const timer = setTimeout(() => {
-      setHearts(prev => prev.filter(h => !newHearts.find(nh => nh.id === h.id)));
-    }, 2000); // clear them after animation
+    setHearts((prev) => [...prev, ...newHearts]);
+  }, [active, trigger, count]);
 
-    return () => clearTimeout(timer);
-  }, [active, count]);
+  const removeHeart = (id: string) => {
+    setHearts((prev) => prev.filter((h) => h.id !== id));
+  };
 
   return (
     <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center overflow-visible">
@@ -33,21 +47,21 @@ export const FloatingHearts = ({ active = false, count = 1 }: FloatingHeartsProp
         {hearts.map((h) => (
           <motion.div
             key={h.id}
-            initial={{ y: 0, x: 0, scale: 0.5, opacity: 0 }}
-            animate={{ 
-              y: -100 - Math.random() * 80, 
+            initial={{ y: 0, x: 0, scale: 0.4, opacity: 0 }}
+            animate={{
+              y: h.yTarget,
               x: h.x,
-              scale: 1 + Math.random() * 0.5,
-              opacity: [0, 1, 1, 0]
+              scale: h.scaleTarget,
+              opacity: [0, 1, 1, 0],
             }}
-            exit={{ opacity: 0 }}
-            transition={{ 
-              duration: 1.2 + Math.random() * 0.5, 
+            transition={{
+              duration: h.duration,
               delay: h.delay,
-              ease: "easeOut"
+              ease: "easeOut",
             }}
-            className="absolute text-red-500 drop-shadow-md"
-            style={{ fontSize: "2rem" }}
+            onAnimationComplete={() => removeHeart(h.id)}
+            className="absolute text-red-500 drop-shadow-md select-none"
+            style={{ fontSize: "1.85rem" }}
           >
             ❤️
           </motion.div>
