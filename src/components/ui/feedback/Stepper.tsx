@@ -8,6 +8,11 @@ export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const Stepper = forwardRef<HTMLDivElement, StepperProps>(
   ({ className, steps, current, ...props }, ref) => {
+    const progress =
+      steps.length > 1
+        ? Math.min(100, Math.max(0, (current / (steps.length - 1)) * 100))
+        : 100;
+
     return (
       <div ref={ref} className={cn("w-full pb-8", className)} {...props}>
         <div className="flex items-center justify-between relative">
@@ -17,7 +22,7 @@ export const Stepper = forwardRef<HTMLDivElement, StepperProps>(
           {/* Active line */}
           <div 
             className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-[#f05a32] z-0 rounded-full transition-all duration-500" 
-            style={{ width: `${(current / (steps.length - 1)) * 100}%` }}
+            style={{ width: `${progress}%` }}
           />
 
           {steps.map((step, index) => {

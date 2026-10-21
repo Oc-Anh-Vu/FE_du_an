@@ -10,13 +10,15 @@ export interface OtpInputProps {
 }
 
 export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
-  ({ length = 6, value = "", onChange, mode = "numeric", className }, ref) => {
-    const [otp, setOtp] = useState<string[]>(value.split("").slice(0, length));
+  ({ length = 6, value, onChange, mode = "numeric", className }, ref) => {
+    const [otp, setOtp] = useState<string[]>(() =>
+      Array.from({ length }, (_, i) => value?.[i] ?? "")
+    );
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     useEffect(() => {
-      if (value.length <= length) {
-        setOtp(value.padEnd(length, " ").split(""));
+      if (value !== undefined) {
+        setOtp(Array.from({ length }, (_, i) => value[i] ?? ""));
       }
     }, [value, length]);
 
@@ -28,7 +30,7 @@ export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
       const val = e.target.value;
-      
+
       let valid = false;
       if (mode === "numeric") {
         valid = /^[0-9]+$/.test(val);
@@ -41,7 +43,7 @@ export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
       const newOtp = [...otp];
       newOtp[index] = val.substring(val.length - 1);
       setOtp(newOtp);
-      
+
       const newString = newOtp.join("").trim();
       onChange?.(newString);
 
@@ -74,7 +76,7 @@ export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
 
       const pastedChars = pastedData.split("").slice(0, length);
       const newOtp = [...otp];
-      
+
       let validStr = "";
       for (let i = 0; i < pastedChars.length; i++) {
         if (mode === "numeric" && /^[0-9]$/.test(pastedChars[i])) {
@@ -88,7 +90,7 @@ export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
 
       setOtp(newOtp);
       onChange?.(newOtp.join("").trim());
-      
+
       const nextIndex = Math.min(validStr.length, length - 1);
       focusInput(nextIndex);
     };
