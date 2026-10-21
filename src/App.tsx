@@ -20,7 +20,7 @@ import {
   Card,
   StatCard,
   PlaceCard,
-  UserListItem,
+  ListItem,
   CopyableCode,
   QRCodeDisplay,
   Divider,
@@ -810,7 +810,7 @@ export default function AppDemo() {
                     <p className="text-[12px] font-bold uppercase text-muted-foreground">
                       UserListItem (Trong phòng chờ & Hóa đơn)
                     </p>
-                    <UserListItem
+                    <ListItem
                       title="Linh Anh"
                       subtitle="Chủ phòng · Đã chọn khẩu vị"
                       avatarColor="bg-purple-500"
@@ -819,7 +819,7 @@ export default function AppDemo() {
                       action={<Badge variant="success">Sẵn sàng</Badge>}
                     />
                     <Divider />
-                    <UserListItem
+                    <ListItem
                       title="Nam Minh"
                       subtitle="Cần thanh toán bữa Lẩu Phan"
                       avatarColor="bg-blue-500"
@@ -1025,7 +1025,7 @@ export default function AppDemo() {
                         </div>
                       </div>
                     ) : (
-                      <UserListItem
+                      <ListItem
                         title="Bún Chả Hương Liên"
                         subtitle="Cách bạn 0.8km · Đánh giá 4.8⭐"
                         avatarColor="bg-[#f05a32]"
@@ -1290,14 +1290,14 @@ export default function AppDemo() {
                         action={<Badge variant="success" dot>3/4 sẵn sàng</Badge>}
                       >
                         <Stack gap={3}>
-                          <UserListItem
+                          <ListItem
                             title="Linh Anh"
                             subtitle="Host · Đã sẵn sàng"
                             avatarColor="bg-purple-500"
                             isReady={true}
                           />
                           <Divider />
-                          <UserListItem
+                          <ListItem
                             title="Nam Minh"
                             subtitle="Thành viên · Đã sẵn sàng"
                             avatarColor="bg-blue-500"
