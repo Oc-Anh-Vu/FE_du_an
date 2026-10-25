@@ -1,6 +1,5 @@
 import { forwardRef, useState } from "react";
 import { Input, type InputProps } from "./Input";
-import { div } from "framer-motion/client";
 
 export interface PasswordInputProps extends InputProps {
   showStrengthMeter?: boolean;

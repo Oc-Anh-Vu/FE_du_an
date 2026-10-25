@@ -4,39 +4,101 @@
 
 @layer base {
   :root {
-    --background: #fff8f1;
-    --foreground: #261b17;
-    --card: #ffffff;
-    --card-foreground: #261b17;
-    --primary: #f05a32;
-    --primary-foreground: #ffffff;
-    --secondary: #ffe0d3;
-    --secondary-foreground: #c63d1c;
-    --muted: #f8f6f5;
-    --muted-foreground: #756761;
-    --border: #eadfd8;
-    --ring: #f05a32;
-    --accent: #fbbf24;
-    --accent-foreground: #261b17;
-    --radius: 0.75rem;
+    --color-background: 255 248 241;
+    --color-foreground: 38 27 23;
+    --color-card: 255 255 255;
+    --color-card-foreground: 38 27 23;
+    --color-primary: 240 90 50;
+    --color-primary-foreground: 255 255 255;
+    --color-primary-hover: 198 61 28;
+    --color-primary-strong: 198 61 28;
+    --color-secondary: 255 224 211;
+    --color-secondary-foreground: 198 61 28;
+    --color-secondary-hover: 255 238 211;
+    --color-muted: 248 246 245;
+    --color-muted-foreground: 117 103 97;
+    --color-accent: 251 191 36;
+    --color-accent-foreground: 38 27 23;
+    --color-highlight: 255 238 211;
+    --color-highlight-foreground: 38 27 23;
+    --color-surface-dark: 58 44 38;
+    --color-surface-dark-foreground: 255 255 255;
+    --color-border: 234 223 216;
+    --color-input: 234 223 216;
+    --color-ring: 240 90 50;
+    --color-success: 14 120 69;
+    --color-success-foreground: 255 255 255;
+    --color-success-soft: 211 255 233;
+    --color-success-soft-foreground: 14 120 69;
+    --color-warning: 180 83 9;
+    --color-warning-foreground: 255 255 255;
+    --color-warning-soft: 254 243 199;
+    --color-warning-soft-foreground: 180 83 9;
+    --color-danger: 220 38 38;
+    --color-danger-foreground: 255 255 255;
+    --color-danger-hover: 185 28 28;
+    --color-danger-soft: 254 226 226;
+    --color-danger-soft-foreground: 185 28 28;
+    --color-info: 3 105 161;
+    --color-info-foreground: 255 255 255;
+    --color-info-soft: 224 242 254;
+    --color-info-soft-foreground: 3 105 161;
+    --color-avatar-purple: 126 34 206;
+    --color-avatar-blue: 29 78 216;
+    --color-avatar-pink: 190 24 93;
+    --color-avatar-emerald: 4 120 87;
+    --color-avatar-amber: 180 83 9;
+    --color-avatar-indigo: 67 56 202;
+    --color-avatar-orange: 194 65 12;
+    --color-avatar-teal: 15 118 110;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   * {
-    border-color: var(--border);
+    border-color: rgb(var(--color-border));
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: 'Inter', system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
+    @apply bg-background font-sans text-body text-foreground antialiased;
+  }
+
+}
+
+@layer components {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  .focus-ring-inverse {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-surface-dark-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface-dark;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

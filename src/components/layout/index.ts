@@ -6,3 +6,4 @@ export * from "./PageSection";
 export * from "./SplitView";
 export * from "./MainLayout";
 export * from "./AuthLayout";
+export * from "./PublicLayout";
