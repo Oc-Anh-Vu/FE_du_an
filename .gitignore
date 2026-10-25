@@ -9,6 +9,7 @@ lerna-debug.log*
 
 graphify-out
 .github
+docs
 node_modules
 dist
 dist-ssr
