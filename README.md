@@ -2,6 +2,10 @@
 
 > Một ứng dụng mạng xã hội ẩm thực thời gian thực (Real-time), giúp các nhóm bạn giải quyết câu hỏi muôn thuở: "Hôm nay ăn gì?" thông qua cơ chế quẹt thẻ (Tinder-like) và tích hợp hệ thống chia tiền (Bill Splitting) thông minh qua mã QR.
 
+## Trạng thái Frontend
+
+Frontend hiện có khung định tuyến và các trang placeholder theo `docs/FE_SPEC.md`; các trang này chưa kết nối API, xác thực, store hoặc nghiệp vụ. Các luồng chưa có hợp đồng Backend được ghi rõ là đang chờ, không dùng dữ liệu giả để mô phỏng kết quả. Bản demo component được giữ tại `src/AppDemo.tsx` nhưng không nằm trong các route sản phẩm.
+
 ---
 
 ## 🚀 1. Công Nghệ Sử Dụng (Tech Stack)
