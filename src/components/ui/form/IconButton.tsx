@@ -10,35 +10,35 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ className = "", variant = "ghost", size = "md", loading = false, children, disabled, ...props }, ref) => {
-    const baseStyles = "inline-flex items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f05a32] disabled:opacity-50 disabled:pointer-events-none cursor-pointer shrink-0";
-    
+  ({ className, variant = "ghost", size = "md", loading = false, children, disabled, type = "button", ...props }, ref) => {
     const variants = {
-      primary: "bg-[#f05a32] text-white hover:bg-[#c63d1c]",
-      secondary: "bg-[#ffe0d3] text-[#c63d1c] hover:bg-[#ffeed3]",
-      outline: "border-2 border-[#eadfd8] text-[#756761] hover:bg-gray-50",
-      ghost: "bg-transparent text-[#756761] hover:bg-gray-100",
-      danger: "bg-red-50 text-red-500 hover:bg-red-100",
+      primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
+      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover",
+      outline: "border border-input bg-card text-foreground hover:bg-muted",
+      ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+      danger: "bg-danger-soft text-danger-soft-foreground hover:bg-danger-soft",
     };
 
     const sizes = {
-      sm: "size-8 text-[16px]",
-      md: "size-10 text-[20px]",
-      lg: "size-12 text-[24px]",
-      xl: "size-14 text-[28px]",
+      sm: "size-8",
+      md: "size-10",
+      lg: "size-12",
+      xl: "size-16",
     };
 
     return (
       <button
         ref={ref}
-        className={cn(baseStyles, variants[variant], sizes[size], className)}
+        type={type}
+        aria-busy={loading || undefined}
+        className={cn("focus-ring inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50", variants[variant], sizes[size], className)}
         disabled={disabled || loading}
         {...props}
       >
         {loading ? (
-          <Spinner size="sm" color={variant === 'primary' ? 'white' : 'primary'} />
+          <Spinner size="sm" tone={variant === "primary" ? "inverse" : "primary"} />
         ) : (
-          children
+          <span aria-hidden="true">{children}</span>
         )}
       </button>
     );

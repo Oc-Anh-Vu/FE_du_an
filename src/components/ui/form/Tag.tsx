@@ -16,16 +16,16 @@ export const Tag = forwardRef<HTMLButtonElement, TagProps>(
         type={type}
         aria-pressed={selected}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full font-bold transition-colors border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          size === "sm" ? "px-2.5 py-1 text-[12px]" : "px-3 py-1.5 text-[14px]",
+        "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full border font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        size === "sm" ? "px-2.5 py-1 text-overline" : "px-3 py-1.5 text-body-sm",
           selected
-            ? "bg-[#ffe0d3] border-[#f05a32] text-[#c63d1c]"
-            : "bg-white border-[#eadfd8] text-[#756761] hover:bg-gray-50",
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card text-foreground hover:border-primary/40",
           className
         )}
         {...props}
       >
-        {emoji && <span>{emoji}</span>}
+        {emoji && <span aria-hidden="true">{emoji}</span>}
         {label}
       </button>
     );

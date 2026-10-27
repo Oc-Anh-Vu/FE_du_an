@@ -1,133 +1,141 @@
-import { forwardRef, useRef, useState, useEffect } from "react";
+import { forwardRef, useId, useRef } from "react";
 import { cn } from "../../../utils/cn";
+import { useControllableState } from "../../../hooks/useControllableState";
 
 export interface OtpInputProps {
   length?: number;
-  value?: string;
-  onChange?: (value: string) => void;
   mode?: "numeric" | "alphanumeric";
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+  onComplete?: (value: string) => void;
+  error?: string;
+  autoFocus?: boolean;
+  disabled?: boolean;
   className?: string;
+  "aria-label"?: string;
 }
 
-export const OtpInput = forwardRef<HTMLDivElement, OtpInputProps>(
-  ({ length = 6, value, onChange, mode = "numeric", className }, ref) => {
-    const [otp, setOtp] = useState<string[]>(() =>
-      Array.from({ length }, (_, i) => value?.[i] ?? "")
-    );
-    const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(
+  (
+    {
+      length = 6,
+      mode = "numeric",
+      value,
+      defaultValue = "",
+      onValueChange,
+      onComplete,
+      error,
+      autoFocus = false,
+      disabled = false,
+      className,
+      "aria-label": ariaLabel = "Mã xác nhận",
+    },
+    forwardedRef,
+  ) => {
+    const generatedId = useId();
+    const safeLength = Math.max(1, Math.floor(length));
+    const normalizedDefault = mode === "alphanumeric" ? defaultValue.toUpperCase() : defaultValue;
+    const [otp, setOtp] = useControllableState({
+      value,
+      defaultValue: normalizedDefault.slice(0, safeLength),
+      onChange: (next) => {
+        onValueChange?.(next);
+        if (next.length === safeLength && Array.from(next).every((char) => Boolean(char) && char !== " ")) {
+          onComplete?.(next);
+        }
+      },
+    });
+    const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-    useEffect(() => {
-      if (value !== undefined) {
-        setOtp(Array.from({ length }, (_, i) => value[i] ?? ""));
-      }
-    }, [value, length]);
-
-    const focusInput = (index: number) => {
-      if (inputRefs.current[index]) {
-        inputRefs.current[index]?.focus();
-      }
+    const assignFirstRef = (node: HTMLInputElement | null) => {
+      inputRefs.current[0] = node;
+      if (typeof forwardedRef === "function") forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
     };
 
-    const isValidChar = (char: string) => {
-      if (mode === "numeric") return /^[0-9]$/.test(char);
-      return /^[a-zA-Z0-9]$/.test(char);
+    const focusInput = (index: number) => inputRefs.current[index]?.focus();
+    const isValidChar = (char: string) =>
+      mode === "numeric" ? /^[0-9]$/.test(char) : /^[a-zA-Z0-9]$/.test(char);
+
+    const updateAt = (index: number, char: string) => {
+      const slots = otp.padEnd(safeLength, " ").slice(0, safeLength).split("");
+      slots[index] = mode === "alphanumeric" ? char.toUpperCase() : char;
+      setOtp(slots.join("").trimEnd());
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-      const val = e.target.value;
-
-      if (val === "") {
-        const newOtp = [...otp];
-        newOtp[index] = "";
-        setOtp(newOtp);
-        onChange?.(newOtp.join(""));
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
+      const chars = Array.from(event.currentTarget.value).filter(isValidChar);
+      if (chars.length === 0) {
+        updateAt(index, " ");
         return;
       }
 
-      // Khi ô đã có sẵn ký tự và người dùng gõ đè ký tự mới (con trỏ có thể ở đầu hoặc cuối)
-      const currentChar = otp[index] || "";
-      let nextChar = val[val.length - 1];
-      if (val.length > 1 && nextChar === currentChar) {
-        nextChar = val[0];
-      }
-
-      if (!isValidChar(nextChar)) return;
-
-      const normalizedChar = mode === "alphanumeric" ? nextChar.toUpperCase() : nextChar;
-      const newOtp = [...otp];
-      newOtp[index] = normalizedChar;
-      setOtp(newOtp);
-      onChange?.(newOtp.join(""));
-
-      if (index < length - 1) {
-        focusInput(index + 1);
-      }
+      updateAt(index, chars[chars.length - 1]);
+      if (index < safeLength - 1) focusInput(index + 1);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        const newOtp = [...otp];
-        if (newOtp[index]) {
-          newOtp[index] = "";
-          setOtp(newOtp);
-          onChange?.(newOtp.join(""));
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        const slots = otp.padEnd(safeLength, " ").slice(0, safeLength).split("");
+        if (slots[index] !== " ") {
+          updateAt(index, " ");
         } else if (index > 0) {
-          newOtp[index - 1] = "";
-          setOtp(newOtp);
-          onChange?.(newOtp.join(""));
+          updateAt(index - 1, " ");
           focusInput(index - 1);
         }
-      } else if (e.key === "ArrowLeft" && index > 0) {
-        e.preventDefault();
+      } else if (event.key === "ArrowLeft" && index > 0) {
+        event.preventDefault();
         focusInput(index - 1);
-      } else if (e.key === "ArrowRight" && index < length - 1) {
-        e.preventDefault();
+      } else if (event.key === "ArrowRight" && index < safeLength - 1) {
+        event.preventDefault();
         focusInput(index + 1);
       }
     };
 
-    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-      e.preventDefault();
-      const pastedData = e.clipboardData.getData("text/plain").trim();
-      if (!pastedData) return;
-
-      const chars = pastedData.split("").filter(isValidChar).slice(0, length);
+    const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+      event.preventDefault();
+      const chars = Array.from(event.clipboardData.getData("text/plain"))
+        .filter(isValidChar)
+        .slice(0, safeLength)
+        .map((char) => mode === "alphanumeric" ? char.toUpperCase() : char);
       if (chars.length === 0) return;
-
-      const newOtp = [...otp];
-      chars.forEach((ch, idx) => {
-        newOtp[idx] = mode === "alphanumeric" ? ch.toUpperCase() : ch;
-      });
-
-      setOtp(newOtp);
-      onChange?.(newOtp.join(""));
-
-      const nextIndex = Math.min(chars.length, length - 1);
-      focusInput(nextIndex);
+      setOtp(chars.join(""));
+      focusInput(Math.min(chars.length, safeLength - 1));
     };
 
+    const errorId = error ? `${generatedId}-error` : undefined;
+
     return (
-      <div ref={ref} className={cn("flex items-center gap-2 flex-wrap", className)}>
-        {Array.from({ length }).map((_, index) => (
+      <div className={cn("space-y-2", className)}>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={ariaLabel} aria-describedby={errorId}>
+          {Array.from({ length: safeLength }, (_, index) => (
           <input
             key={index}
-            ref={(el) => {
-              inputRefs.current[index] = el;
-            }}
-            type={mode === "numeric" ? "tel" : "text"}
+            ref={index === 0 ? assignFirstRef : (node) => { inputRefs.current[index] = node; }}
+            type="text"
             inputMode={mode === "numeric" ? "numeric" : "text"}
-            value={otp[index] || ""}
-            onChange={(e) => handleChange(e, index)}
-            onKeyDown={(e) => handleKeyDown(e, index)}
+            autoComplete="one-time-code"
+            autoFocus={autoFocus && index === 0}
+            value={otp[index] === " " ? "" : mode === "alphanumeric" ? (otp[index] ?? "").toUpperCase() : otp[index] ?? ""}
+            onChange={(event) => handleChange(event, index)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
             onPaste={handlePaste}
-            aria-label={`Ô mã xác nhận thứ ${index + 1}`}
-            className="w-11 sm:w-12 h-14 text-center text-[22px] sm:text-[24px] font-bold bg-[#f8f6f5] border border-[#eadfd8] rounded-xl text-[#261b17] focus-visible:border-[#f05a32] focus-visible:bg-white outline-none transition-all"
-            maxLength={2}
+            aria-label={`Ký tự ${index + 1} trên ${safeLength}`}
+            aria-invalid={error ? true : undefined}
+            disabled={disabled}
+            maxLength={safeLength}
+            className={cn(
+              "focus-ring h-14 w-11 rounded-control border border-input bg-muted text-center text-heading font-bold tabular-nums text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+              error && "border-danger focus-visible:ring-danger",
+            )}
           />
-        ))}
+          ))}
+        </div>
+        {error && <p id={errorId} className="text-caption font-semibold text-danger">{error}</p>}
       </div>
     );
-  }
+  },
 );
 OtpInput.displayName = "OtpInput";

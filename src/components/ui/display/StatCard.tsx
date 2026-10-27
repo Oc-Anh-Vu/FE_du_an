@@ -2,58 +2,43 @@ import { forwardRef } from "react";
 import { Card } from "./Card";
 import { cn } from "../../../utils/cn";
 
-export interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface StatCardProps extends React.HTMLAttributes<HTMLElement> {
   title: string;
   value: React.ReactNode;
   description?: string;
   icon?: React.ReactNode;
   variant?: "default" | "dark" | "danger";
+  trend?: React.ReactNode;
 }
 
-export const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
-  ({ className, title, value, description, icon, variant = "default", ...props }, ref) => {
-    
-    const variants = {
-      default: "bg-white text-[#261b17] border-[#eadfd8]",
-      dark: "bg-[#261b17] text-white border-transparent",
-      danger: "bg-[#fff0ed] text-[#c63d1c] border-[#ffcdbe]",
-    };
-
-    const valueColors = {
-      default: "text-[#f05a32]",
-      dark: "text-white",
-      danger: "text-[#c63d1c]",
-    };
-
-    const descColors = {
-      default: "text-[#756761]",
-      dark: "text-gray-400",
-      danger: "text-[#d16147]",
-    };
-
+export const StatCard = forwardRef<HTMLElement, StatCardProps>(
+  ({ className, title, value, description, icon, variant = "default", trend, ...props }, ref) => {
+    const valueClass = variant === "danger" ? "text-danger-soft-foreground" : variant === "dark" ? "text-surface-dark-foreground" : "text-primary-strong";
+    const mutedClass = variant === "dark" ? "text-surface-dark-foreground/70" : "text-muted-foreground";
     return (
-      <Card 
-        ref={ref} 
-        variant="default" // base shape
-        className={cn("border", variants[variant], className)}
+      <Card
+        ref={ref}
+        variant={variant === "dark" ? "dark" : "default"}
+        className={cn(variant === "danger" && "border-danger/20 bg-danger-soft", className)}
         {...props}
       >
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h3 className={cn("text-[14px] font-medium opacity-80", variant === "default" && "text-[#756761]")}>
+            <h3 className={cn("text-body-sm font-semibold", mutedClass)}>
               {title}
             </h3>
-            <div className={cn("text-[24px] font-bold", valueColors[variant])}>
+            <div className={cn("text-title tabular-nums md:text-title-lg", valueClass)}>
               {value}
             </div>
             {description && (
-              <p className={cn("text-[13px]", descColors[variant])}>
+              <p className={cn("text-caption", mutedClass)}>
                 {description}
               </p>
             )}
+            {trend && <div className="text-caption font-semibold">{trend}</div>}
           </div>
           {icon && (
-            <div className={cn("p-2 rounded-full", variant === "dark" ? "bg-white/10" : variant === "danger" ? "bg-[#ffcdbe]/50" : "bg-[#fff8f1]")}>
+            <div aria-hidden="true" className={cn("rounded-full p-2", variant === "dark" ? "bg-surface-dark-foreground/10" : variant === "danger" ? "bg-danger/10" : "bg-highlight")}>
               {icon}
             </div>
           )}

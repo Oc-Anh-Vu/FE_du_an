@@ -1,55 +1,62 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { cn } from "../../../utils/cn";
 
-export interface CopyableCodeProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface CopyableCodeProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onCopy"> {
   code: string;
   label?: string;
-  onCopied?: () => void;
+  onCopied?: (code: string) => void;
 }
 
 export const CopyableCode = forwardRef<HTMLButtonElement, CopyableCodeProps>(
   ({ className, code, label, onCopied, ...props }, ref) => {
-    const [copied, setCopied] = useState(false);
+    const [status, setStatus] = useState<"idle" | "copied" | "manual">("idle");
+    const codeRef = useRef<HTMLSpanElement>(null);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    useEffect(() => () => clearTimeout(timerRef.current), []);
 
     const handleCopy = async () => {
       try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API is unavailable");
         await navigator.clipboard.writeText(code);
-        setCopied(true);
-        onCopied?.();
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err) {
-        console.error("Failed to copy", err);
+        setStatus("copied");
+        onCopied?.(code);
+      } catch {
+        const range = document.createRange();
+        if (codeRef.current) {
+          range.selectNodeContents(codeRef.current);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+        setStatus("manual");
       }
+
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setStatus("idle"), 2000);
     };
-
-    const CopyIcon = (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-    );
-
-    const CheckIcon = (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-    );
 
     return (
       <button
         ref={ref}
         type="button"
         onClick={handleCopy}
-        className={cn("flex flex-col items-center gap-1 group", className)}
+        aria-label={`Sao chép mã ${code}`}
+        className={cn("focus-ring inline-flex min-h-11 flex-col items-center gap-1 rounded-control", className)}
         {...props}
       >
-        {label && <span className="text-[13px] text-[#756761] font-medium">{label}</span>}
-        <div className="flex items-center gap-3 bg-[#f8f6f5] hover:bg-[#eadfd8] transition-colors py-2 px-4 rounded-xl border border-transparent focus-visible:border-[#f05a32] outline-none">
-          <span className="text-[24px] font-bold text-[#261b17] tracking-widest">{code}</span>
-          <div className="text-[#756761] group-hover:text-[#f05a32] transition-colors">
-            {copied ? CheckIcon : CopyIcon}
-          </div>
-        </div>
-        <div className={cn("text-[12px] font-bold transition-opacity h-4", copied ? "opacity-100 text-green-500" : "opacity-0")}>
-          Đã sao chép ✓
-        </div>
+        {label && <span className="text-caption font-semibold text-muted-foreground">{label}</span>}
+        <span className="inline-flex items-center gap-3 rounded-control border border-border bg-muted px-4 py-2 transition-colors hover:bg-highlight">
+          <span ref={codeRef} className="text-heading font-bold tracking-widest text-foreground">{code}</span>
+          <span aria-hidden="true" className="text-primary-strong">
+            {status === "copied" ? "✓" : "▢"}
+          </span>
+        </span>
+        <span aria-live="polite" className="min-h-5 text-caption font-semibold text-success-soft-foreground">
+          {status === "copied" ? "Đã sao chép!" : status === "manual" ? "Đã chọn mã. Nhấn Ctrl+C để sao chép." : ""}
+        </span>
       </button>
     );
-  }
+  },
 );
 CopyableCode.displayName = "CopyableCode";

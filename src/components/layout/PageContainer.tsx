@@ -2,16 +2,17 @@ import { forwardRef } from "react";
 import { cn } from "../../utils/cn";
 
 export interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement> {
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "full";
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
   centered?: boolean;
   padded?: boolean;
 }
 
 const maxWidthMap: Record<NonNullable<PageContainerProps["maxWidth"]>, string> = {
   sm: "max-w-md mx-auto w-full",
-  md: "max-w-lg mx-auto w-full",
-  lg: "max-w-3xl mx-auto w-full",
+  md: "max-w-xl mx-auto w-full",
+  lg: "max-w-4xl mx-auto w-full",
   xl: "max-w-6xl mx-auto w-full",
+  "2xl": "max-w-7xl mx-auto w-full",
   full: "w-full",
 };
 
@@ -19,7 +20,7 @@ export const PageContainer = forwardRef<HTMLDivElement, PageContainerProps>(
   (
     {
       className,
-      maxWidth = "full",
+      maxWidth = "xl",
       centered = false,
       padded = true,
       children,
@@ -31,8 +32,8 @@ export const PageContainer = forwardRef<HTMLDivElement, PageContainerProps>(
       <div
         ref={ref}
         className={cn(
-          "flex flex-col gap-6 bg-[#fff8f1] min-h-full font-sans text-[#261b17]",
-          padded && "p-4 md:p-8",
+          "mx-auto flex min-h-full w-full flex-col gap-6 text-foreground md:gap-8",
+          padded && "px-4 py-6 md:px-8 md:py-8",
           centered && "items-center justify-center",
           maxWidthMap[maxWidth],
           className

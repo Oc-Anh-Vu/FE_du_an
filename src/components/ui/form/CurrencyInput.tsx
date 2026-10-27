@@ -1,48 +1,35 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef } from "react";
 import { Input, type InputProps } from "./Input";
 import { formatVND, parseVND } from "../../../utils/currencyFormat";
+import { useControllableState } from "../../../hooks/useControllableState";
 
-export interface CurrencyInputProps extends Omit<InputProps, "value" | "onChange"> {
+export interface CurrencyInputProps extends Omit<InputProps, "value" | "defaultValue" | "onChange" | "type" | "inputMode"> {
   value?: number | null;
+  defaultValue?: number | null;
   onValueChange?: (value: number | null) => void;
   suffix?: string;
 }
 
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ value, onValueChange, suffix = "đ", ...props }, ref) => {
-    const [displayValue, setDisplayValue] = useState("");
-
-    useEffect(() => {
-      if (value !== undefined && value !== null) {
-        setDisplayValue(formatVND(value));
-      } else if (value === null) {
-        setDisplayValue("");
-      }
-    }, [value]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const rawValue = e.target.value;
-      const numValue = parseVND(rawValue);
-
-      if (rawValue === "") {
-        setDisplayValue("");
-        onValueChange?.(null);
-        return;
-      }
-
-      if (!isNaN(numValue)) {
-        setDisplayValue(formatVND(numValue));
-        onValueChange?.(numValue);
-      }
-    };
+  ({ value, defaultValue = null, onValueChange, suffix = "đ", ...props }, ref) => {
+    const [amount, setAmount] = useControllableState({
+      value,
+      defaultValue,
+      onChange: onValueChange,
+    });
+    const displayValue = amount === null ? "" : formatVND(amount);
 
     return (
       <Input
         ref={ref}
         type="text"
+        inputMode="numeric"
         value={displayValue}
-        onChange={handleChange}
-        rightSlot={suffix ? <span className="text-[#756761] text-[14px]">{suffix}</span> : undefined}
+        onChange={(event) => {
+          const digits = event.currentTarget.value.replace(/[^0-9]/g, "");
+          setAmount(digits ? parseVND(digits) : null);
+        }}
+        rightIcon={suffix ? <span className="text-caption text-muted-foreground">{suffix}</span> : undefined}
         {...props}
       />
     );

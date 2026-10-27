@@ -1,70 +1,38 @@
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 import { cn } from "../../utils/cn";
 
-export interface PageSectionProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface PageSectionProps extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
   variant?: "surface" | "flat" | "dark";
 }
 
-const variantClasses: Record<NonNullable<PageSectionProps["variant"]>, string> = {
-  surface: "bg-white rounded-[28px] p-5 md:p-6 border border-[#eadfd8]",
+const variantClasses = {
+  surface: "rounded-section border border-border bg-card p-5 md:p-6",
   flat: "bg-transparent p-0",
-  dark: "bg-[#3a2c26] text-white rounded-[28px] p-6",
+  dark: "rounded-section bg-surface-dark p-5 text-surface-dark-foreground md:p-6",
 };
 
-export const PageSection = forwardRef<HTMLDivElement, PageSectionProps>(
-  (
-    {
-      className,
-      title,
-      subtitle,
-      action,
-      variant = "surface",
-      children,
-      ...props
-    },
-    ref
-  ) => {
+export const PageSection = forwardRef<HTMLElement, PageSectionProps>(
+  ({ className, title, subtitle, action, variant = "surface", children, ...props }, ref) => {
+    const titleId = useId();
     const isDark = variant === "dark";
 
     return (
-      <section
-        ref={ref}
-        className={cn(variantClasses[variant], className)}
-        {...props}
-      >
+      <section ref={ref} className={cn(variantClasses[variant], className)} aria-labelledby={title ? titleId : undefined} {...props}>
         {(title || subtitle || action) && (
-          <div className="flex items-center justify-between gap-4 mb-4 md:mb-5">
-            <div>
-              {title && (
-                <h2
-                  className={cn(
-                    "text-[18px] md:text-[20px] font-bold leading-snug",
-                    isDark ? "text-white" : "text-[#261b17]"
-                  )}
-                >
-                  {title}
-                </h2>
-              )}
-              {subtitle && (
-                <p
-                  className={cn(
-                    "text-[13px] mt-0.5",
-                    isDark ? "text-white/70" : "text-[#756761]"
-                  )}
-                >
-                  {subtitle}
-                </p>
-              )}
+          <header className="mb-4 flex items-start justify-between gap-4 md:mb-5">
+            <div className="min-w-0">
+              {title && <h2 id={titleId} className="text-heading font-bold text-foreground">{title}</h2>}
+              {subtitle && <p className={cn("mt-1 text-body-sm", isDark ? "text-surface-dark-foreground/70" : "text-muted-foreground")}>{subtitle}</p>}
             </div>
             {action && <div className="shrink-0">{action}</div>}
-          </div>
+          </header>
         )}
         {children}
       </section>
     );
-  }
+  },
 );
 PageSection.displayName = "PageSection";
