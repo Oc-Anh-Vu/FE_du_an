@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { cn } from "../../../utils/cn";
 import {
   AVATAR_BG_CLASS,
@@ -31,6 +31,8 @@ const ringClasses = {
 
 export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, src, name, initials, color = getAvatarColor(name), size = "md", isOnline = false, ring = "none", ...props }, ref) => {
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const showImage = Boolean(src && failedSrc !== src);
     const fallbackInitials = initials ?? name.trim().split(/\s+/).slice(-2).map((part) => part[0] ?? "").join("").toUpperCase();
 
     return (
@@ -39,8 +41,15 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
         className={cn("relative inline-flex shrink-0 rounded-full", ringClasses[ring], className)}
         {...props}
       >
-        {src ? (
-          <img src={src} alt={name} className={cn("rounded-full object-cover", sizes[size])} />
+        {showImage ? (
+          <img
+            src={src}
+            alt={name}
+            onError={() => {
+              if (src) setFailedSrc(src);
+            }}
+            className={cn("rounded-full object-cover", sizes[size])}
+          />
         ) : (
           <span
             aria-label={name}

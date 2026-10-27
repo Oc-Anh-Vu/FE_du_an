@@ -14,9 +14,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     const variants = {
       primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
       secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover",
-      outline: "border border-input bg-card text-foreground hover:bg-muted",
+      outline: "border-2 border-primary text-primary-strong hover:bg-secondary",
       ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-      danger: "bg-danger-soft text-danger-soft-foreground hover:bg-danger-soft",
+      danger: "bg-danger text-danger-foreground hover:bg-danger-hover",
     };
 
     const sizes = {
@@ -36,7 +36,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         {...props}
       >
         {loading ? (
-          <Spinner size="sm" tone={variant === "primary" ? "inverse" : "primary"} />
+          <Spinner size="sm" tone={variant === "primary" || variant === "danger" ? "inverse" : "primary"} />
         ) : (
           <span aria-hidden="true">{children}</span>
         )}

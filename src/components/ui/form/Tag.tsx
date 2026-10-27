@@ -16,11 +16,11 @@ export const Tag = forwardRef<HTMLButtonElement, TagProps>(
         type={type}
         aria-pressed={selected}
         className={cn(
-        "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full border font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" ? "px-2.5 py-1 text-overline" : "px-3 py-1.5 text-body-sm",
+          "focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full border font-bold transition-colors disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+          size === "sm" ? "px-2.5 py-1 text-overline" : "px-3 py-1.5 text-body-sm",
           selected
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-card text-foreground hover:border-primary/40",
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-border bg-card text-foreground hover:border-primary/40",
           className
         )}
         {...props}

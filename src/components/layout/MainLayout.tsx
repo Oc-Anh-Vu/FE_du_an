@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { createElement, forwardRef } from "react";
 import { Avatar } from "../ui/display/Avatar";
 import { cn } from "../../utils/cn";
 import type { AvatarColor } from "../../utils/avatarColor";
@@ -20,14 +20,37 @@ export interface MainLayoutUserProfile {
   onClick?: () => void;
 }
 
-type LinkRenderer = (href: string, children: React.ReactNode, className: string, ariaCurrent?: "page") => React.ReactNode;
+export type MainLayoutLinkRenderer = (
+  href: string,
+  children: React.ReactNode,
+  className: string,
+  ariaCurrent?: "page",
+) => React.ReactNode;
+
+export type MainLayoutRouterLinkProps = {
+  to: string;
+  className?: string;
+  "aria-current"?: React.AriaAttributes["aria-current"];
+  children?: React.ReactNode;
+} & React.RefAttributes<HTMLAnchorElement>;
+
+export type MainLayoutLinkComponent =
+  | MainLayoutLinkRenderer
+  | "a"
+  | React.ForwardRefExoticComponent<MainLayoutRouterLinkProps>;
+
+function isRouterLinkComponent(
+  component: MainLayoutLinkComponent,
+): component is React.ForwardRefExoticComponent<MainLayoutRouterLinkProps> {
+  return (typeof component === "object" || typeof component === "function") && "$$typeof" in component;
+}
 
 export interface MainLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   brandName?: string;
   brandLogo?: React.ReactNode;
   brandHref?: string;
   onBrandClick?: () => void;
-  linkComponent?: LinkRenderer;
+  linkComponent?: MainLayoutLinkComponent;
   navItems: NavItemConfig[];
   activeKey?: string;
   onSelectNav?: (key: string) => void;
@@ -72,11 +95,15 @@ export const MainLayout = forwardRef<HTMLDivElement, MainLayoutProps>(
   ) => {
     const profileInitials = userProfile?.initials
       ?? userProfile?.name.trim().split(/\s+/).slice(-2).map((part) => part[0] ?? "").join("").toUpperCase();
-    const renderLink: LinkRenderer = (href, content, linkClassName, ariaCurrent) => (
-      linkComponent
-        ? linkComponent(href, content, linkClassName, ariaCurrent)
-        : <a href={href} className={linkClassName} aria-current={ariaCurrent}>{content}</a>
-    );
+    const renderLink: MainLayoutLinkRenderer = (href, content, linkClassName, ariaCurrent) => {
+      if (!linkComponent || linkComponent === "a") {
+        return <a href={href} className={linkClassName} aria-current={ariaCurrent}>{content}</a>;
+      }
+      if (isRouterLinkComponent(linkComponent)) {
+        return createElement(linkComponent, { to: href, className: linkClassName, "aria-current": ariaCurrent }, content);
+      }
+      return linkComponent(href, content, linkClassName, ariaCurrent);
+    };
 
     const renderNavigationItem = (item: NavItemConfig, mobile = false) => {
       const active = item.key === activeKey;

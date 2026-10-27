@@ -19,7 +19,7 @@ export const StatCard = forwardRef<HTMLElement, StatCardProps>(
       <Card
         ref={ref}
         variant={variant === "dark" ? "dark" : "default"}
-        className={cn(variant === "danger" && "border-danger/20 bg-danger-soft", className)}
+        className={cn("rounded-panel", variant === "danger" && "border-danger/20 bg-danger-soft", className)}
         {...props}
       >
         <div className="flex items-start justify-between gap-4">

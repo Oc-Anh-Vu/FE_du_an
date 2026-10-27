@@ -61,7 +61,7 @@ export const ListItem = forwardRef<ListItemElement, ListItemProps>(
             isOnline={isOnline}
             color={avatarColor ?? getAvatarColor(title)}
             size="md"
-            className={isReady ? "ring-2 ring-success ring-offset-2 ring-offset-card" : undefined}
+            ring={isReady ? "ready" : "none"}
           />
           <div className="min-w-0">
             <p className="truncate text-body font-bold text-foreground">{title}</p>

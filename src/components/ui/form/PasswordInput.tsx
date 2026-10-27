@@ -47,7 +47,8 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
             <button
               type="button"
               onClick={toggleShow}
-              className="focus-ring rounded-control text-muted-foreground hover:text-foreground"
+              disabled={props.disabled}
+              className="focus-ring rounded-control text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
               aria-pressed={show}
             >

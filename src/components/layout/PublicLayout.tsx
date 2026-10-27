@@ -1,14 +1,32 @@
-import type { ReactNode } from "react";
+import { createElement, type AriaAttributes, type ForwardRefExoticComponent, type ReactNode, type RefAttributes } from "react";
 import { buttonVariants } from "../ui/form/buttonVariants";
 import { cn } from "../../utils/cn";
 
-type LinkRenderer = (href: string, children: ReactNode, className: string) => ReactNode;
+export type PublicLayoutLinkRenderer = (href: string, children: ReactNode, className: string) => ReactNode;
+
+export type PublicLayoutRouterLinkProps = {
+  to: string;
+  className?: string;
+  "aria-current"?: AriaAttributes["aria-current"];
+  children?: ReactNode;
+} & RefAttributes<HTMLAnchorElement>;
+
+export type PublicLayoutLinkComponent =
+  | PublicLayoutLinkRenderer
+  | "a"
+  | ForwardRefExoticComponent<PublicLayoutRouterLinkProps>;
+
+function isRouterLinkComponent(
+  component: PublicLayoutLinkComponent,
+): component is ForwardRefExoticComponent<PublicLayoutRouterLinkProps> {
+  return (typeof component === "object" || typeof component === "function") && "$$typeof" in component;
+}
 
 export interface PublicLayoutProps {
   children: ReactNode;
   brandName?: string;
-  linkComponent?: LinkRenderer;
-  renderLink?: LinkRenderer;
+  linkComponent?: PublicLayoutLinkComponent;
+  renderLink?: PublicLayoutLinkRenderer;
   loginHref?: string;
   signupHref?: string;
   rightActions?: ReactNode;
@@ -28,8 +46,15 @@ export function PublicLayout({
   isAuthenticated = false,
 }: PublicLayoutProps) {
   const render = linkComponent ?? renderLink;
-  const link = (href: string, label: ReactNode, className: string) =>
-    render ? render(href, label, className) : <a className={className} href={href}>{label}</a>;
+  const link = (href: string, label: ReactNode, className: string) => {
+    if (!render || render === "a") {
+      return <a className={className} href={href}>{label}</a>;
+    }
+    if (isRouterLinkComponent(render)) {
+      return createElement(render, { to: href, className }, label);
+    }
+    return render(href, label, className);
+  };
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
@@ -51,7 +76,7 @@ export function PublicLayout({
             {!isAuthenticated && link(
               signupHref,
               "Đăng ký",
-              cn(buttonVariants({ variant: "primary", size: "sm" }), "md:h-10 md:px-4 md:text-body-sm"),
+              cn(buttonVariants({ variant: "primary", size: "sm" }), "rounded-full md:h-10 md:px-4 md:text-body-sm"),
             )}
             {rightActions}
           </nav>
@@ -60,7 +85,7 @@ export function PublicLayout({
       <main className="flex-1" id="main-content">
         {children}
       </main>
-      <footer className="border-t border-border px-4 py-6 text-center text-body-sm text-muted-foreground">
+      <footer className="border-t border-border px-4 py-8 text-center text-caption text-muted-foreground">
         {footerText}
       </footer>
     </div>

@@ -2,7 +2,7 @@ import { forwardRef, useId } from "react";
 import { cn } from "../../../utils/cn";
 import { useControllableState } from "../../../hooks/useControllableState";
 
-export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'defaultValue'> {
+export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue"> {
   label?: string;
   value?: number;
   defaultValue?: number;
@@ -14,7 +14,7 @@ export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 export const Slider = forwardRef<HTMLInputElement, SliderProps>(
-  ({ className, label, value, defaultValue, min = 0, max = 100, step = 1, onValueChange, formatValue, id: externalId, ...props }, ref) => {
+  ({ className, label, value, defaultValue, min = 0, max = 100, step = 1, onValueChange, onChange, formatValue, id: externalId, ...props }, ref) => {
     const internalId = useId();
     const id = externalId || internalId;
     const [currentValue, setCurrentValue] = useControllableState({
@@ -31,7 +31,7 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(
               {label}
             </label>
           )}
-          <span className="text-body-sm font-semibold text-primary-strong">{formatValue ? formatValue(currentValue) : currentValue}</span>
+          <span className="text-body-sm font-semibold tabular-nums text-primary-strong">{formatValue ? formatValue(currentValue) : currentValue}</span>
         </div>
         <div className="relative flex h-11 items-center">
           <input
@@ -42,7 +42,10 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(
             max={max}
             step={step}
             value={currentValue}
-            onChange={(event) => setCurrentValue(Number(event.currentTarget.value))}
+            onChange={(event) => {
+              setCurrentValue(Number(event.currentTarget.value));
+              onChange?.(event);
+            }}
             aria-valuetext={formatValue?.(currentValue)}
             className="focus-ring relative z-10 h-11 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
             {...props}
