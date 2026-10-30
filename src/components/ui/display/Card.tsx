@@ -1,50 +1,54 @@
-import { forwardRef } from "react";
+import { createElement, forwardRef } from "react";
 import { cn } from "../../../utils/cn";
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+type CardElement = HTMLElement;
+
+export interface CardProps extends React.HTMLAttributes<HTMLElement> {
+  as?: "div" | "section" | "article";
   title?: string;
   description?: string;
   footer?: React.ReactNode;
   padding?: "none" | "sm" | "md" | "lg";
-  variant?: "default" | "dark" | "highlight";
+  variant?: "default" | "highlight" | "dark";
   headerAction?: React.ReactNode;
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className = "", title, description, footer, padding = "md", variant = "default", headerAction, children, ...props }, ref) => {
-    
-    const variants = {
-      default: "bg-white border border-[#eadfd8]",
-      dark: "bg-[#261b17] border-[#261b17] text-white",
-      highlight: "bg-[#fff8f1] border-[#f05a32]",
-    };
-    
-    const paddings = {
-      none: "p-0",
-      sm: "p-3",
-      md: "p-4",
-      lg: "p-6",
-    };
+const variants = {
+  default: "border border-border bg-card text-card-foreground",
+  highlight: "border border-secondary bg-highlight text-highlight-foreground",
+  dark: "border border-surface-dark bg-surface-dark text-surface-dark-foreground",
+};
 
-    return (
-      <div
-        ref={ref}
-        className={cn("rounded-2xl overflow-hidden", variants[variant], className)}
-        {...props}
-      >
+const paddings = {
+  none: "p-0",
+  sm: "p-3",
+  md: "p-4 md:p-6",
+  lg: "p-6 md:p-8",
+};
+
+export const Card = forwardRef<CardElement, CardProps>(
+  ({ as = "div", className, title, description, footer, padding = "md", variant = "default", headerAction, children, ...props }, ref) => (
+    createElement(
+      as,
+      {
+        ...props,
+        ref,
+        className: cn("overflow-hidden rounded-card", variants[variant], className),
+      },
+      <>
         {(title || description || headerAction) && (
-          <div className={cn("border-b flex justify-between items-center", paddings[padding], variant === 'dark' ? 'border-gray-700' : 'border-[#eadfd8]')}>
-            <div>
-              {title && <h3 className={cn("font-bold text-[16px]", variant === 'dark' ? 'text-white' : 'text-[#261b17]')}>{title}</h3>}
-              {description && <p className={cn("text-[13px] mt-1", variant === 'dark' ? 'text-gray-400' : 'text-[#756761]')}>{description}</p>}
+          <div className={cn("flex items-start justify-between gap-4 border-b border-border/70", paddings[padding])}>
+            <div className="min-w-0">
+              {title && <h3 className="text-heading-sm text-current">{title}</h3>}
+              {description && <p className="mt-1 text-body-sm text-current/70">{description}</p>}
             </div>
-            {headerAction && <div>{headerAction}</div>}
+            {headerAction && <div className="shrink-0">{headerAction}</div>}
           </div>
         )}
         <div className={paddings[padding]}>{children}</div>
-        {footer && <div className={cn("border-t", paddings[padding], variant === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-[#eadfd8] bg-gray-50')}>{footer}</div>}
-      </div>
-    );
-  }
+        {footer && <div className={cn("border-t border-border/70 bg-muted/50", paddings[padding])}>{footer}</div>}
+      </>,
+    )
+  ),
 );
 Card.displayName = "Card";

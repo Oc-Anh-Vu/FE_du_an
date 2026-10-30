@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export interface FloatingHeartsProps {
-  active?: boolean;
   trigger?: number;
   count?: number;
+  active?: boolean;
 }
 
 interface HeartParticle {
@@ -16,54 +16,50 @@ interface HeartParticle {
   delay: number;
 }
 
-export const FloatingHearts = ({ active = false, trigger, count = 1 }: FloatingHeartsProps) => {
+export const FloatingHearts = ({ trigger, count = 5, active = false }: FloatingHeartsProps) => {
   const [hearts, setHearts] = useState<HeartParticle[]>([]);
-  const seqRef = useRef(0);
+  const sequence = useRef(0);
+  const activationRef = useRef<string | null>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const shouldSpawn = trigger !== undefined ? trigger > 0 : active;
-    if (!shouldSpawn) return;
+    const activation = trigger !== undefined ? `trigger:${trigger}` : `active:${active}`;
+    if (activationRef.current === activation) return;
+    activationRef.current = activation;
+    if (!shouldSpawn || reducedMotion) return;
 
-    const batchId = `${Date.now()}-${++seqRef.current}`;
-    const newHearts: HeartParticle[] = Array.from({ length: count }).map((_, idx) => ({
-      id: `${batchId}-${idx}`,
-      x: Math.random() * 80 - 40, // -40px đến +40px từ tâm
+    const batchId = `${Date.now()}-${++sequence.current}`;
+    const batch = Array.from({ length: Math.max(0, Math.floor(count)) }, (_, index): HeartParticle => ({
+      id: `${batchId}-${index}`,
+      x: Math.random() * 80 - 40,
       yTarget: -100 - Math.random() * 70,
       scaleTarget: 1 + Math.random() * 0.45,
       duration: 1.15 + Math.random() * 0.45,
       delay: Math.random() * 0.18,
     }));
-
-    setHearts((prev) => [...prev, ...newHearts]);
-  }, [active, trigger, count]);
+    setHearts((previous) => [...previous, ...batch]);
+  }, [trigger, active, count, reducedMotion]);
 
   const removeHeart = (id: string) => {
-    setHearts((prev) => prev.filter((h) => h.id !== id));
+    setHearts((previous) => previous.filter((heart) => heart.id !== id));
   };
 
+  if (reducedMotion) return null;
+
   return (
-    <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center overflow-visible">
+    <div className="pointer-events-none absolute inset-0 z-effects flex items-center justify-center overflow-visible" aria-hidden="true">
       <AnimatePresence>
-        {hearts.map((h) => (
+        {hearts.map((heart) => (
           <motion.div
-            key={h.id}
+            key={heart.id}
             initial={{ y: 0, x: 0, scale: 0.4, opacity: 0 }}
-            animate={{
-              y: h.yTarget,
-              x: h.x,
-              scale: h.scaleTarget,
-              opacity: [0, 1, 1, 0],
-            }}
-            transition={{
-              duration: h.duration,
-              delay: h.delay,
-              ease: "easeOut",
-            }}
-            onAnimationComplete={() => removeHeart(h.id)}
-            className="absolute text-red-500 drop-shadow-md select-none"
-            style={{ fontSize: "1.85rem" }}
+            animate={{ y: heart.yTarget, x: heart.x, scale: heart.scaleTarget, opacity: [0, 1, 1, 0] }}
+            transition={{ duration: heart.duration, delay: heart.delay, ease: "easeOut" }}
+            onAnimationComplete={() => removeHeart(heart.id)}
+            className="absolute select-none text-danger"
           >
-            ❤️
+            ♥
           </motion.div>
         ))}
       </AnimatePresence>

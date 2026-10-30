@@ -1,18 +1,19 @@
 import { forwardRef } from "react";
-import { Avatar, type AvatarProps } from "./Avatar";
+import { Avatar } from "./Avatar";
 import { cn } from "../../../utils/cn";
+import { getAvatarColor, type AvatarColor } from "../../../utils/avatarColor";
 
 export interface UserItem {
   id: string;
   name: string;
   avatarUrl?: string;
-  color?: string;
+  color?: AvatarColor;
 }
 
 export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   users: UserItem[];
   max?: number;
-  size?: AvatarProps['size'];
+  size?: "sm" | "md" | "lg";
 }
 
 export const AvatarGroup = forwardRef<HTMLDivElement, AvatarGroupProps>(
@@ -20,34 +21,27 @@ export const AvatarGroup = forwardRef<HTMLDivElement, AvatarGroupProps>(
     const visibleUsers = users.slice(0, max);
     const overflowCount = Math.max(0, users.length - max);
 
-    const sizeClasses = {
-      sm: "size-8 text-[11px]",
-      md: "size-10 text-[13px]",
-      lg: "size-12 text-[15px]",
-      xl: "size-16 text-[18px]",
-    };
-
-    const getInitials = (name: string) => {
-      return name.trim().split(/\s+/).slice(-2).map(w => w[0]).join("").toUpperCase();
-    };
-
     return (
       <div ref={ref} className={cn("flex items-center -space-x-3", className)} {...props}>
-        {visibleUsers.map((user, i) => (
-          <div key={user.id} className="relative ring-2 ring-white rounded-full z-10" style={{ zIndex: visibleUsers.length - i }}>
-            <Avatar 
-              size={size} 
-              src={user.avatarUrl} 
-              initials={getInitials(user.name)} 
-              color={user.color} 
+        {visibleUsers.map((user) => (
+          <div key={user.id} className="relative z-10 rounded-full ring-2 ring-card">
+            <Avatar
+              size={size}
+              src={user.avatarUrl}
+              name={user.name}
+              color={user.color ?? getAvatarColor(user.id)}
             />
           </div>
         ))}
         {overflowCount > 0 && (
-          <div 
+          <div
+            role="img"
+            aria-label={`và ${overflowCount} người khác`}
             className={cn(
-              "relative ring-2 ring-white rounded-full flex items-center justify-center bg-[#eadfd8] text-[#756761] font-bold z-0",
-              sizeClasses[size]
+              "relative z-0 flex items-center justify-center rounded-full bg-muted font-bold text-muted-foreground ring-2 ring-card",
+              size === "sm" && "size-8 text-micro",
+              size === "md" && "size-10 text-caption",
+              size === "lg" && "size-12 text-body-sm",
             )}
           >
             +{overflowCount}

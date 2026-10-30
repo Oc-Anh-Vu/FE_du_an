@@ -1,9 +1,10 @@
-import { forwardRef } from "react";
+import { createElement, forwardRef } from "react";
 import { cn } from "../../utils/cn";
 
-export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface StackProps extends React.HTMLAttributes<HTMLElement> {
+  as?: React.ElementType;
   direction?: "vertical" | "horizontal";
-  gap?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12;
+  gap?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   align?: "start" | "center" | "end" | "stretch" | "baseline";
   justify?: "start" | "center" | "end" | "between" | "around";
   wrap?: boolean;
@@ -17,8 +18,11 @@ const gapClasses: Record<NonNullable<StackProps["gap"]>, string> = {
   4: "gap-4",
   5: "gap-5",
   6: "gap-6",
+  7: "gap-7",
   8: "gap-8",
+  9: "gap-9",
   10: "gap-10",
+  11: "gap-11",
   12: "gap-12",
 };
 
@@ -38,7 +42,7 @@ const justifyClasses: Record<NonNullable<StackProps["justify"]>, string> = {
   around: "justify-around",
 };
 
-export const Stack = forwardRef<HTMLDivElement, StackProps>(
+export const Stack = forwardRef<HTMLElement, StackProps>(
   (
     {
       className,
@@ -47,27 +51,30 @@ export const Stack = forwardRef<HTMLDivElement, StackProps>(
       align,
       justify,
       wrap = false,
+      as = "div",
       children,
       ...props
     },
     ref
   ) => {
     return (
-      <div
-        ref={ref}
-        className={cn(
-          "flex",
-          direction === "vertical" ? "flex-col" : "flex-row",
-          gapClasses[gap],
-          align && alignClasses[align],
-          justify && justifyClasses[justify],
-          wrap && "flex-wrap",
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </div>
+      createElement(
+        as,
+        {
+          ...props,
+          ref,
+          className: cn(
+            "flex",
+            direction === "vertical" ? "flex-col" : "flex-row",
+            gapClasses[gap],
+            align && alignClasses[align],
+            justify && justifyClasses[justify],
+            wrap && "flex-wrap",
+            className,
+          ),
+        },
+        children,
+      )
     );
   }
 );

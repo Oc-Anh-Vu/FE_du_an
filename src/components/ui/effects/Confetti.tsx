@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { cn } from "../../../utils/cn";
 
 export interface ConfettiProps {
-  active?: boolean;
   trigger?: number;
-  duration?: number;
   count?: number;
+  duration?: number;
+  active?: boolean;
   onComplete?: () => void;
 }
 
@@ -15,91 +16,102 @@ interface ConfettiPiece {
   driftX: number;
   delay: number;
   fallDuration: number;
-  color: string;
+  colorClass: string;
   size: number;
   rotation: number;
   rotateDelta: number;
   isCircle: boolean;
 }
 
+const colors = [
+  "bg-primary",
+  "bg-success",
+  "bg-info",
+  "bg-accent",
+  "bg-warning",
+  "bg-avatar-pink",
+];
+
 export const Confetti = ({
-  active = false,
   trigger,
-  duration = 3200,
   count = 50,
+  duration = 3200,
+  active = false,
   onComplete,
 }: ConfettiProps) => {
   const [pieces, setPieces] = useState<ConfettiPiece[]>([]);
-  const seqRef = useRef(0);
+  const sequence = useRef(0);
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  const activationRef = useRef<string | null>(null);
+  const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const currentProps = useRef({ count, duration });
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    currentProps.current = { count, duration };
+  });
 
   useEffect(() => {
     const shouldSpawn = trigger !== undefined ? trigger > 0 : active;
-    if (!shouldSpawn) {
-      if (trigger === undefined && !active) {
-        setPieces([]);
-      }
-      return;
-    }
+    const activation = trigger !== undefined ? `trigger:${trigger}` : `active:${active}`;
+    if (activationRef.current === activation) return;
+    activationRef.current = activation;
+    if (!shouldSpawn || reducedMotion) return;
 
-    const colors = ["#f05a32", "#22c55e", "#3b82f6", "#eab308", "#ec4899", "#a855f7"];
-    const batchId = `${Date.now()}-${++seqRef.current}`;
+    const batchId = `${Date.now()}-${++sequence.current}`;
+    const durationMs = Math.max(1, currentProps.current.duration);
+    const batch = Array.from({ length: Math.max(0, Math.floor(currentProps.current.count)) }, (_, index): ConfettiPiece => {
+      const delay = Math.random() * 0.45;
+      return {
+        id: `${batchId}-${index}`,
+        x: Math.random() * 100,
+        driftX: Math.random() * 20 - 10,
+        delay,
+        fallDuration: Math.max(0.1, durationMs / 1000 - delay),
+        colorClass: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 10 + 6,
+        rotation: Math.random() * 360,
+        rotateDelta: Math.random() * 720 - 360,
+        isCircle: Math.random() > 0.5,
+      };
+    });
 
-    const newPieces: ConfettiPiece[] = Array.from({ length: count }).map((_, i) => ({
-      id: `${batchId}-${i}`,
-      x: Math.random() * 100, // percentage vw
-      driftX: Math.random() * 20 - 10,
-      delay: Math.random() * 0.45,
-      fallDuration: 2.2 + Math.random() * 1.4,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: Math.random() * 10 + 6, // 6 to 16px
-      rotation: Math.random() * 360,
-      rotateDelta: Math.random() * 720 - 360,
-      isCircle: Math.random() > 0.5,
-    }));
-
-    setPieces((prev) => [...prev, ...newPieces]);
-
+    setPieces((previous) => [...previous, ...batch]);
     const timer = setTimeout(() => {
-      setPieces((prev) => prev.filter((p) => !p.id.startsWith(batchId)));
+      setPieces((previous) => previous.filter((piece) => !piece.id.startsWith(batchId)));
+      timersRef.current.delete(batchId);
       onCompleteRef.current?.();
-    }, duration);
+    }, durationMs);
+    timersRef.current.set(batchId, timer);
+  }, [trigger, active, reducedMotion]);
 
-    return () => clearTimeout(timer);
-  }, [active, trigger, duration, count]);
+  useEffect(() => () => {
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current.clear();
+  }, []);
 
-  if (pieces.length === 0) return null;
+  if (reducedMotion || pieces.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
-      <AnimatePresence>
-        {pieces.map((p) => (
-          <motion.div
-            key={p.id}
-            initial={{ top: "-10%", left: `${p.x}%`, rotate: p.rotation, opacity: 1 }}
-            animate={{
-              top: "110%",
-              left: `${p.x + p.driftX}%`,
-              rotate: p.rotation + p.rotateDelta,
-              opacity: [1, 1, 1, 0],
-            }}
-            exit={{ opacity: 0 }}
-            transition={{
-              duration: p.fallDuration,
-              delay: p.delay,
-              ease: "linear",
-            }}
-            style={{
-              position: "absolute",
-              width: p.size,
-              height: p.size * (p.isCircle ? 1 : 1.5),
-              backgroundColor: p.color,
-              borderRadius: p.isCircle ? "50%" : "2px",
-            }}
-          />
-        ))}
-      </AnimatePresence>
+    <div className="pointer-events-none fixed inset-0 z-effects overflow-hidden" aria-hidden="true">
+      {pieces.map((piece) => (
+        <motion.div
+          key={piece.id}
+          initial={{ top: "-10%", left: `${piece.x}%`, rotate: piece.rotation, opacity: 1 }}
+          animate={{
+            top: "110%",
+            left: `${piece.x + piece.driftX}%`,
+            rotate: piece.rotation + piece.rotateDelta,
+            opacity: [1, 1, 1, 0],
+          }}
+          transition={{ duration: piece.fallDuration, delay: piece.delay, ease: "linear" }}
+          className={cn("absolute", piece.colorClass, piece.isCircle ? "rounded-full" : "rounded-sm")}
+          style={{
+            width: piece.size,
+            height: piece.size * (piece.isCircle ? 1 : 1.5),
+          }}
+        />
+      ))}
     </div>
   );
 };
