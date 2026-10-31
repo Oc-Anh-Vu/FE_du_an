@@ -1,86 +1,33 @@
-import { useEffect, useState } from "react";
-import type { Client } from "@stomp/stompjs";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { PartyPopper, Sparkles } from "lucide-react";
 import { Button } from "../../components/ui/form/Button";
 import { Confetti } from "../../components/ui/effects/Confetti";
-
-export interface MatchFoundMessage {
-  type: "MATCH_FOUND";
-  placeName?: string;
-  restaurantName?: string;
-  message?: string;
-}
+import type { PlaceResponse } from "../../types/api";
 
 export interface MatchResultProps {
-  socketClient: Client;
-  socketConnected: boolean;
-  matchTopic: string;
-  onMatchFound?: (match: MatchFoundMessage) => void;
+  matchedPlace: PlaceResponse | null;
   onContinue?: () => void;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function parseMatchMessage(body: string): MatchFoundMessage | null {
-  if (body.trim() === "MATCH_FOUND") {
-    return { type: "MATCH_FOUND" };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch (error) {
-    console.error("Không thể đọc tin nhắn kết quả ghép đôi từ WebSocket.", error);
-    return null;
-  }
-
-  if (!isRecord(parsed) || (parsed.type !== "MATCH_FOUND" && parsed.event !== "MATCH_FOUND")) {
-    return null;
-  }
-
-  return {
-    type: "MATCH_FOUND",
-    placeName:
-      typeof parsed.placeName === "string" ? parsed.placeName : undefined,
-    restaurantName:
-      typeof parsed.restaurantName === "string"
-        ? parsed.restaurantName
-        : undefined,
-    message: typeof parsed.message === "string" ? parsed.message : undefined,
-  };
-}
-
 export default function MatchResult({
-  socketClient,
-  socketConnected,
-  matchTopic,
-  onMatchFound,
+  matchedPlace,
   onContinue,
 }: MatchResultProps) {
-  const [match, setMatch] = useState<MatchFoundMessage | null>(null);
   const [confettiTrigger, setConfettiTrigger] = useState(0);
+  const lastCelebratedMatchId = useRef<string | null>(null);
+  const matchedPlaceId = matchedPlace?.id;
 
   useEffect(() => {
-    if (!socketConnected || !socketClient.connected) return;
-
-    const subscription = socketClient.subscribe(matchTopic, (message) => {
-      const matchMessage = parseMatchMessage(message.body);
-      if (!matchMessage) return;
-
-      setMatch(matchMessage);
+    if (!matchedPlaceId) {
+      lastCelebratedMatchId.current = null;
+    } else if (matchedPlaceId !== lastCelebratedMatchId.current) {
+      lastCelebratedMatchId.current = matchedPlaceId;
       setConfettiTrigger((trigger) => trigger + 1);
-      onMatchFound?.(matchMessage);
-    });
+    }
+  }, [matchedPlaceId]);
 
-    return () => subscription.unsubscribe();
-  }, [matchTopic, onMatchFound, socketClient, socketConnected]);
-
-  if (!match) return null;
-
-  const placeName = match.restaurantName ?? match.placeName;
+  if (!matchedPlace) return null;
 
   return (
     <>
@@ -114,18 +61,13 @@ export default function MatchResult({
             Cả nhóm đã tìm được kèo!
           </h1>
           <p className="mx-auto mt-4 max-w-md text-base leading-7 text-[#756761]">
-            {match.message ??
-              (placeName
-                ? `Mọi người cùng đi ăn ${placeName} nhé!`
-                : "Mọi người đã đồng ý. Cùng chuẩn bị cho bữa ăn thôi!")}
+            Mọi người cùng đi ăn {matchedPlace.name} nhé!
           </p>
 
-          {placeName && (
-            <div className="mx-auto mt-7 inline-flex items-center gap-2 rounded-full border border-[#f5c5b4] bg-white px-5 py-3 font-bold text-[#c63d1c] shadow-sm">
-              <span aria-hidden="true">🍽️</span>
-              {placeName}
-            </div>
-          )}
+          <div className="mx-auto mt-7 inline-flex items-center gap-2 rounded-full border border-[#f5c5b4] bg-white px-5 py-3 font-bold text-[#c63d1c] shadow-sm">
+            <span aria-hidden="true">🍽️</span>
+            {matchedPlace.name}
+          </div>
 
           {onContinue && (
             <div className="mt-8">

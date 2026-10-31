@@ -1,71 +1,56 @@
-import { useEffect, useState } from "react";
-import type { Client } from "@stomp/stompjs";
-import { AnimatePresence, motion } from "framer-motion";
+import { useRef, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { PlaceCard, type Place } from "../../components/ui/display/PlaceCard";
-import { FloatingHearts } from "../../components/ui/effects/FloatingHearts";
 import { EmptyState } from "../../components/ui/feedback/EmptyState";
+import FramerCard from "./FramerCard";
 
 export type SwipeDirection = "like" | "pass";
 
 export interface SwipeDeckProps {
   places: Place[];
-  socketClient: Client;
-  socketConnected: boolean;
-  heartTopic: string;
-  onSwipe?: (place: Place, direction: SwipeDirection) => void | Promise<void>;
+  onSwipe: (place: Place, direction: SwipeDirection) => void | Promise<void>;
 }
-
-const SWIPE_THRESHOLD = 120;
 
 export default function SwipeDeck({
   places,
-  socketClient,
-  socketConnected,
-  heartTopic,
   onSwipe,
 }: SwipeDeckProps) {
   const [swipedPlaceIds, setSwipedPlaceIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [swipingId, setSwipingId] = useState<string | null>(null);
-  const [exitDirection, setExitDirection] = useState(1);
-  const [heartTrigger, setHeartTrigger] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!socketConnected || !socketClient.connected) return;
-
-    const subscription = socketClient.subscribe(heartTopic, () => {
-      setHeartTrigger((trigger) => trigger + 1);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [heartTopic, socketClient, socketConnected]);
+  const swipeInProgress = useRef(false);
 
   const remainingPlaces = places.filter(
     (place) => !swipedPlaceIds.has(place.id),
   );
 
-  async function swipe(direction: SwipeDirection) {
+  async function swipe(direction: SwipeDirection): Promise<void> {
     const place = remainingPlaces[0];
-    if (!place || swipingId) return;
-
-    setSwipingId(place.id);
+    if (!place || swipeInProgress.current) return;
+    swipeInProgress.current = true;
+    swipeInProgress.current = true;
     setError(null);
-    setExitDirection(direction === "like" ? 1 : -1);
 
     try {
-      await onSwipe?.(place, direction);
+      await onSwipe(place, direction);
       setSwipedPlaceIds((currentIds) => new Set(currentIds).add(place.id));
     } catch (swipeError) {
-      setError(
+      const message =
         swipeError instanceof Error
           ? swipeError.message
-          : "Không thể ghi nhận lượt quẹt. Vui lòng thử lại.",
-      );
+          : "Không thể ghi nhận lượt quẹt. Vui lòng thử lại.";
+      setError(message);
+      throw swipeError instanceof Error ? swipeError : new Error(message);
     } finally {
-      setSwipingId(null);
+      swipeInProgress.current = false;
     }
+  }
+
+  function runButtonSwipe(direction: SwipeDirection) {
+    void swipe(direction).catch(() => {
+      // The error is already shown in the deck's alert.
+    });
   }
 
   const currentPlace = remainingPlaces[0];
@@ -85,37 +70,20 @@ export default function SwipeDeck({
 
       {currentPlace ? (
         <AnimatePresence mode="wait">
-          <motion.div
+          <FramerCard
             key={currentPlace.id}
-            className="relative touch-pan-y"
-            drag={swipingId ? false : "x"}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.7}
-            onDragEnd={(_, info) => {
-              if (info.offset.x >= SWIPE_THRESHOLD) {
-                void swipe("like");
-              } else if (info.offset.x <= -SWIPE_THRESHOLD) {
-                void swipe("pass");
-              }
-            }}
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1, x: 0, rotate: 0 }}
-            exit={{
-              opacity: 0,
-              x: exitDirection * 500,
-              rotate: exitDirection * 15,
-              transition: { duration: 0.2 },
-            }}
-            transition={{ duration: 0.2 }}
+            onSwipe={(direction) =>
+              swipe(direction === "right" ? "like" : "pass")
+            }
+            onError={(swipeError) => setError(swipeError.message)}
           >
-            <FloatingHearts trigger={heartTrigger} count={3} />
             <PlaceCard
               place={currentPlace}
               showActions
-              onPass={() => void swipe("pass")}
-              onLike={() => void swipe("like")}
+              onPass={() => runButtonSwipe("pass")}
+              onLike={() => runButtonSwipe("like")}
             />
-          </motion.div>
+          </FramerCard>
         </AnimatePresence>
       ) : (
         <EmptyState
