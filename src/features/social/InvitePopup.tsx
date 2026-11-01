@@ -73,21 +73,29 @@ export default function InvitePopup({
   subscribeInvitations,
   respondToInvitation,
 }: InvitePopupProps) {
-  const [invitation, setInvitation] = useState<RoomInvitation | null>(null);
+  const [invitations, setInvitations] = useState<RoomInvitation[]>([]);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
   const responseInProgress = useRef(false);
+  const invitation = invitations[0] ?? null;
 
   useEffect(() => {
     const handleInvitation = (payload: string) => {
       const nextInvitation = parseInvitation(payload);
       if (!nextInvitation) return;
 
-      setInvitation(nextInvitation);
-      setPendingAction(null);
-      setError(null);
+      setInvitations((currentInvitations) => {
+        if (
+          currentInvitations.some(
+            (current) => current.invitationId === nextInvitation.invitationId,
+          )
+        ) {
+          return currentInvitations;
+        }
+        return [...currentInvitations, nextInvitation];
+      });
     };
 
     if (
@@ -121,9 +129,10 @@ export default function InvitePopup({
 
     try {
       await respondToInvitation(invitationId, decision);
-      setInvitation((current) =>
-        current?.invitationId === invitationId ? null : current,
+      setInvitations((current) =>
+        current.filter((item) => item.invitationId !== invitationId),
       );
+      setError(null);
     } catch (responseError) {
       setError(
         responseError instanceof Error
@@ -140,7 +149,7 @@ export default function InvitePopup({
 
   function closeInvitation() {
     if (responseInProgress.current) return;
-    setInvitation(null);
+    setInvitations((current) => current.slice(1));
     setError(null);
   }
 
