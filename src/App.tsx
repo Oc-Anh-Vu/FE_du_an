@@ -17,6 +17,7 @@ import {
   WalletCards,
 } from "lucide-react"
 import { MainLayout, type NavItemConfig } from "./components/layout"
+import AdminRouteGuard from "./components/layout/AdminRouteGuard"
 import { PublicLayout } from "./components/layout"
 import Home from "./pages/Home"
 import NotFound from "./pages/NotFound"
@@ -160,7 +161,14 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route path="/admin" element={<WorkspaceLayout kind="admin" />}>
+      <Route
+        path="/admin"
+        element={
+          <AdminRouteGuard>
+            <WorkspaceLayout kind="admin" />
+          </AdminRouteGuard>
+        }
+      >
         <Route index element={<AdminDashboard />} />
         <Route path="users" element={<UsersManagement />} />
         <Route path="places" element={<PlacesManagement />} />
