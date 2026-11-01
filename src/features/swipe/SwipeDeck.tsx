@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Client } from "@stomp/stompjs";
 import { AnimatePresence } from "framer-motion";
 import { PlaceCard, type Place } from "../../components/ui/display/PlaceCard";
+import { FloatingHearts } from "../../components/ui/effects/FloatingHearts";
 import { EmptyState } from "../../components/ui/feedback/EmptyState";
 import FramerCard from "./FramerCard";
 
@@ -8,11 +10,21 @@ export type SwipeDirection = "like" | "pass";
 
 export interface SwipeDeckProps {
   places: Place[];
+  socketClient?: Client;
+  socketConnected?: boolean;
+  heartTopic?: string;
+  swipeTopic?: string;
+  swipePayload?: Record<string, unknown>;
   onSwipe: (place: Place, direction: SwipeDirection) => void | Promise<void>;
 }
 
 export default function SwipeDeck({
   places,
+  socketClient,
+  socketConnected = false,
+  heartTopic,
+  swipeTopic,
+  swipePayload,
   onSwipe,
 }: SwipeDeckProps) {
   const [swipedPlaceIds, setSwipedPlaceIds] = useState<Set<string>>(
@@ -20,6 +32,17 @@ export default function SwipeDeck({
   );
   const [error, setError] = useState<string | null>(null);
   const swipeInProgress = useRef(false);
+  const [heartTrigger, setHeartTrigger] = useState(0);
+
+  useEffect(() => {
+    if (!heartTopic || !socketConnected || !socketClient?.connected) return;
+
+    const subscription = socketClient.subscribe(heartTopic, () => {
+      setHeartTrigger((trigger) => trigger + 1);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [heartTopic, socketClient, socketConnected]);
 
   const remainingPlaces = places.filter(
     (place) => !swipedPlaceIds.has(place.id),
@@ -28,7 +51,6 @@ export default function SwipeDeck({
   async function swipe(direction: SwipeDirection): Promise<void> {
     const place = remainingPlaces[0];
     if (!place || swipeInProgress.current) return;
-    swipeInProgress.current = true;
     swipeInProgress.current = true;
     setError(null);
 
@@ -72,11 +94,16 @@ export default function SwipeDeck({
         <AnimatePresence mode="wait">
           <FramerCard
             key={currentPlace.id}
+            socketClient={socketClient}
+            socketConnected={socketConnected}
+            swipePayload={{ ...swipePayload, placeId: currentPlace.id }}
+            destination={swipeTopic}
             onSwipe={(direction) =>
               swipe(direction === "right" ? "like" : "pass")
             }
             onError={(swipeError) => setError(swipeError.message)}
           >
+            <FloatingHearts trigger={heartTrigger} count={3} />
             <PlaceCard
               place={currentPlace}
               showActions
