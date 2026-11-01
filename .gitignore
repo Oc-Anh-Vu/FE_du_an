@@ -30,3 +30,8 @@ dist-ssr
 Dockerfile
 .dockerignore
 nginx.conf
+
+# Environment variables
+.env
+.env.*
+!.env.example
