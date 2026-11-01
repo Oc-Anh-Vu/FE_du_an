@@ -1,60 +1,78 @@
-import { forwardRef } from "react";
+import { createElement, forwardRef } from "react";
 import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
 import { cn } from "../../../utils/cn";
+import { getAvatarColor, type AvatarColor } from "../../../utils/avatarColor";
 
-export interface ListItemProps extends React.HTMLAttributes<HTMLDivElement> {
+type ListItemElement = HTMLDivElement | HTMLLIElement;
+
+export interface ListItemProps extends React.HTMLAttributes<ListItemElement> {
+  as?: "div" | "li";
   title: string;
   subtitle?: string;
   avatarUrl?: string;
   avatarInitials?: string;
-  avatarColor?: string;
-  avatarSize?: "sm" | "md" | "lg" | "xl";
+  avatarColor?: AvatarColor;
   isOnline?: boolean;
-  isReady?: boolean; 
+  isReady?: boolean;
   action?: React.ReactNode;
 }
 
-export const ListItem = forwardRef<HTMLDivElement, ListItemProps>(
-  ({ className = "", title, subtitle, avatarUrl, avatarInitials, avatarColor = "bg-blue-500", avatarSize = "md", isOnline, isReady, action, ...props }, ref) => {
-    // Tự động tạo chữ viết tắt từ title (VD: "Nam Minh" -> "NM", "Lẩu Phan" -> "LP")
-    const initials = avatarInitials || title.trim().split(/\s+/).slice(-2).map(w => w[0]).join("").toUpperCase();
+export const ListItem = forwardRef<ListItemElement, ListItemProps>(
+  (
+    {
+      as = "div",
+      className,
+      title,
+      subtitle,
+      avatarUrl,
+      avatarInitials,
+      avatarColor,
+      isOnline,
+      isReady,
+      action,
+      ...props
+    },
+    ref,
+  ) => {
+    const initials =
+      avatarInitials ??
+      title
+        .trim()
+        .split(/\s+/)
+        .slice(-2)
+        .map((part) => part[0] ?? "")
+        .join("")
+        .toUpperCase();
 
-    const isInteractive = !!props.onClick;
-
-    return (
-      <div 
-        ref={ref} 
-        className={cn(
-          "flex items-center justify-between py-2 transition-colors rounded-xl", 
-          isInteractive && "cursor-pointer hover:bg-gray-50 px-2 -mx-2",
-          className
-        )} 
-        {...(isInteractive ? { role: "button", tabIndex: 0 } : {})}
-        {...props}
-      >
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Avatar 
-              src={avatarUrl} 
-              initials={initials} 
-              isOnline={isOnline} 
-              color={avatarColor} 
-              size={avatarSize}
-            />
-            {isReady !== undefined && (
-               <span className={cn("absolute -top-1 -right-1 size-4 rounded-full border-2 border-white flex items-center justify-center z-10", isReady ? 'bg-green-500 text-white' : 'bg-gray-300')}>
-                 {isReady && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-               </span>
-            )}
+    return createElement(
+      as,
+      {
+        ...props,
+        ref,
+        className: cn("flex items-center justify-between gap-3 rounded-card py-2", className),
+      },
+      <>
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar
+            src={avatarUrl}
+            name={title}
+            initials={initials}
+            isOnline={isOnline}
+            color={avatarColor ?? getAvatarColor(title)}
+            size="md"
+            ring={isReady ? "ready" : "none"}
+          />
+          <div className="min-w-0">
+            <p className="truncate text-body font-bold text-foreground">{title}</p>
+            {subtitle && <p className="line-clamp-2 text-body-sm text-muted-foreground">{subtitle}</p>}
           </div>
-          <div>
-            <p className="font-bold text-[15px] text-[#261b17]">{title}</p>
-            {subtitle && <p className="text-[#756761] text-[13px]">{subtitle}</p>}
-          </div>
+          {isReady && <Badge variant="success" size="sm">Sẵn sàng</Badge>}
         </div>
-        {action && <div>{action}</div>}
-      </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </>,
     );
-  }
+  },
 );
+
 ListItem.displayName = "ListItem";

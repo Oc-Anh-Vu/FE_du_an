@@ -6,64 +6,43 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   hint?: string;
   error?: string;
   leftIcon?: React.ReactNode;
-  rightSlot?: React.ReactNode;
-  inputSize?: "sm" | "md" | "lg";
+  rightIcon?: React.ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", label, hint, error, leftIcon, rightSlot, inputSize = "md", id: externalId, ...props }, ref) => {
+  ({ className, label, hint, error, leftIcon, rightIcon, id: externalId, required, ...props }, ref) => {
     const internalId = useId();
     const id = externalId || internalId;
-    
-    const sizes = {
-      sm: "h-10 text-[13px] px-3",
-      md: "h-12 text-[14px] px-4",
-      lg: "h-14 text-[16px] px-4",
-    };
-
-    const hasError = !!error;
+    const hintId = hint ? `${id}-hint` : undefined;
+    const errorId = error ? `${id}-error` : undefined;
 
     return (
-      <div className={cn("flex flex-col gap-1.5 w-full", className)}>
+      <div className={cn("w-full space-y-1.5", className)}>
         {label && (
-          <label htmlFor={id} className="text-[14px] font-bold text-[#261b17]">
-            {label} {props.required && <span className="text-[#f05a32]">*</span>}
+          <label htmlFor={id} className="block text-body-sm font-semibold text-foreground">
+            {label} {required && <span aria-hidden="true" className="ml-0.5 text-danger">*</span>}
           </label>
         )}
-        <div className="relative flex items-center w-full">
-          {leftIcon && (
-            <div className="absolute left-3 text-[#756761] pointer-events-none flex items-center">
-              {leftIcon}
-            </div>
-          )}
+        <div className="relative">
+          {leftIcon && <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{leftIcon}</span>}
           <input
             ref={ref}
             id={id}
+            required={required}
             className={cn(
-              "w-full bg-[#f8f6f5] border border-transparent rounded-xl text-[#261b17] placeholder:text-[#a0938d] outline-none transition-all",
-              "focus-visible:border-[#f05a32] focus-visible:bg-white disabled:opacity-50 disabled:cursor-not-allowed",
-              hasError && "border-red-500 bg-red-50 focus-visible:border-red-500",
-              sizes[inputSize],
+              "focus-ring h-11 w-full rounded-control border border-input bg-card px-4 text-body text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
               leftIcon && "pl-10",
-              rightSlot && "pr-12"
+              rightIcon && "pr-12",
+              error && "border-danger focus-visible:ring-danger",
             )}
-            aria-invalid={hasError}
-            aria-describedby={
-              hasError ? `${id}-error` : hint ? `${id}-hint` : undefined
-            }
+            aria-invalid={error ? true : undefined}
+            aria-describedby={[errorId, hintId].filter(Boolean).join(" ") || undefined}
             {...props}
           />
-          {rightSlot && (
-            <div className="absolute right-3 flex items-center">
-              {rightSlot}
-            </div>
-          )}
+          {rightIcon && <span className="absolute right-3 top-1/2 -translate-y-1/2">{rightIcon}</span>}
         </div>
-        {hasError ? (
-          <span id={`${id}-error`} className="text-[12px] text-red-500 mt-0.5">{error}</span>
-        ) : hint ? (
-          <span id={`${id}-hint`} className="text-[12px] text-[#756761] mt-0.5">{hint}</span>
-        ) : null}
+        {error && <p id={errorId} className="text-caption font-semibold text-danger">{error}</p>}
+        {hint && !error && <p id={hintId} className="text-caption text-muted-foreground">{hint}</p>}
       </div>
     );
   }

@@ -1,54 +1,39 @@
-import { forwardRef, useId, useState, useEffect } from "react";
+import { forwardRef, useId } from "react";
 import { cn } from "../../../utils/cn";
+import { useControllableState } from "../../../hooks/useControllableState";
 
-export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'defaultValue'> {
+export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue"> {
   label?: string;
   value?: number;
   defaultValue?: number;
   min?: number;
   max?: number;
   step?: number;
-  onChange?: (value: number) => void;
+  onValueChange?: (value: number) => void;
   formatValue?: (value: number) => string;
 }
 
 export const Slider = forwardRef<HTMLInputElement, SliderProps>(
-  ({ className = "", label, value, defaultValue, min = 0, max = 100, step = 1, onChange, formatValue, id: externalId, ...props }, ref) => {
+  ({ className, label, value, defaultValue, min = 0, max = 100, step = 1, onValueChange, onChange, formatValue, id: externalId, ...props }, ref) => {
     const internalId = useId();
     const id = externalId || internalId;
-    
-    const [localValue, setLocalValue] = useState<number>(() => value ?? defaultValue ?? min);
-
-    useEffect(() => {
-      if (value !== undefined) {
-        setLocalValue(value);
-      }
-    }, [value]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = Number(e.target.value);
-      if (value === undefined) {
-        setLocalValue(newValue);
-      }
-      onChange?.(newValue);
-    };
-
-    const range = max - min;
-    const percentage = range > 0 ? Math.min(100, Math.max(0, ((localValue - min) / range) * 100)) : 0;
+    const [currentValue, setCurrentValue] = useControllableState({
+      value,
+      defaultValue: defaultValue ?? min,
+      onChange: onValueChange,
+    });
 
     return (
-      <div className={cn("flex flex-col gap-2 w-full", className)}>
+      <div className={cn("flex w-full flex-col gap-2", className)}>
         <div className="flex justify-between items-center">
           {label && (
-            <label htmlFor={id} className="text-[14px] font-bold text-[#261b17]">
+            <label htmlFor={id} className="text-body-sm font-semibold text-foreground">
               {label}
             </label>
           )}
-          <span className="text-[14px] font-bold text-[#f05a32]">
-            {formatValue ? formatValue(localValue) : localValue}
-          </span>
+          <span className="text-body-sm font-semibold tabular-nums text-primary-strong">{formatValue ? formatValue(currentValue) : currentValue}</span>
         </div>
-        <div className="relative flex items-center h-5">
+        <div className="relative flex h-11 items-center">
           <input
             ref={ref}
             id={id}
@@ -56,22 +41,14 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(
             min={min}
             max={max}
             step={step}
-            value={localValue}
-            onChange={handleChange}
-            className="w-full absolute z-20 opacity-0 cursor-pointer h-full"
+            value={currentValue}
+            onChange={(event) => {
+              setCurrentValue(Number(event.currentTarget.value));
+              onChange?.(event);
+            }}
+            aria-valuetext={formatValue?.(currentValue)}
+            className="focus-ring relative z-10 h-11 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
             {...props}
-          />
-          {/* Custom Track */}
-          <div className="w-full h-1.5 bg-[#eadfd8] rounded-full overflow-hidden z-0">
-            <div 
-              className="h-full bg-[#f05a32]" 
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          {/* Custom Thumb */}
-          <div 
-            className="absolute size-5 bg-white border-2 border-[#f05a32] rounded-full shadow z-10 pointer-events-none transition-transform"
-            style={{ left: `calc(${percentage}% - 10px)` }}
           />
         </div>
       </div>

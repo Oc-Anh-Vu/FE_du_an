@@ -1,22 +1,18 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useState } from "react";
 import { Input, type InputProps } from "./Input";
+import { cn } from "../../../utils/cn";
 
-export interface SearchInputProps extends InputProps {
+export interface SearchInputProps extends Omit<InputProps, "type"> {
   onClear?: () => void;
-  filterSlot?: React.ReactNode;
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
-  ({ onClear, filterSlot, value, defaultValue, onChange, ...props }, ref) => {
+  ({ onClear, value, defaultValue, onChange, onKeyDown, ...props }, ref) => {
     const [internalValue, setInternalValue] = useState<string>(() =>
       value !== undefined ? String(value) : defaultValue !== undefined ? String(defaultValue) : ""
     );
 
-    useEffect(() => {
-      if (value !== undefined) {
-        setInternalValue(String(value));
-      }
-    }, [value]);
+    const currentValue = value !== undefined ? String(value) : internalValue;
 
     const SearchIcon = (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -40,37 +36,35 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       onClear?.();
     };
 
-    const hasValue = internalValue.length > 0;
-    const showRightActions = hasValue || !!filterSlot;
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape" && currentValue) {
+        event.preventDefault();
+        handleClear();
+      }
+      onKeyDown?.(event);
+    };
+
+    const hasValue = currentValue.length > 0;
 
     return (
       <Input
         ref={ref}
-        type="text"
-        value={internalValue}
+        type="search"
+        value={currentValue}
         onChange={handleChange}
+        onKeyDown={handleKeyDown}
         leftIcon={SearchIcon}
-        rightSlot={
-          showRightActions ? (
-            <div className="flex items-center gap-1">
-              {hasValue && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="size-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 hover:text-gray-900 transition-colors cursor-pointer"
-                  aria-label="Xóa tìm kiếm"
-                >
-                  {ClearIcon}
-                </button>
-              )}
-              {filterSlot && (
-                <div className="ml-1 pl-2 border-l border-[#eadfd8]">
-                  {filterSlot}
-                </div>
-              )}
-            </div>
-          ) : undefined
-        }
+        rightIcon={hasValue ? (
+          <button
+            type="button"
+            onClick={handleClear}
+            className={cn("focus-ring flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground")}
+            aria-label="Xóa từ khóa"
+            disabled={props.disabled}
+          >
+            <span aria-hidden="true">{ClearIcon}</span>
+          </button>
+        ) : undefined}
         {...props}
       />
     );

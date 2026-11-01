@@ -14,7 +14,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 
     return (
       <div className={cn("flex items-start gap-3", className)}>
-        <div className="flex items-center h-5 mt-0.5">
+        <div className="mt-0.5 flex h-5 items-center">
           <input
             ref={(node) => {
               if (typeof ref === "function") {
@@ -28,19 +28,20 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             }}
             id={id}
             type="checkbox"
-            className="w-5 h-5 rounded border-[#eadfd8] text-[#f05a32] focus:ring-[#f05a32] transition-colors cursor-pointer accent-[#f05a32]"
+            aria-describedby={description ? `${id}-description` : undefined}
+            className="focus-ring size-5 cursor-pointer rounded border-input text-primary accent-primary disabled:cursor-not-allowed disabled:opacity-50"
             {...props}
           />
         </div>
         {(label || description) && (
           <div className="flex flex-col">
             {label && (
-              <label htmlFor={id} className="text-[15px] font-medium text-[#261b17] cursor-pointer leading-5">
+              <label htmlFor={id} className="cursor-pointer text-body font-semibold text-foreground">
                 {label}
               </label>
             )}
             {description && (
-              <p className="text-[13px] text-[#756761] mt-0.5">{description}</p>
+              <p id={`${id}-description`} className="mt-0.5 text-caption text-muted-foreground">{description}</p>
             )}
           </div>
         )}

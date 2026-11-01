@@ -1,10 +1,12 @@
-import { forwardRef } from "react";
+import { createElement, forwardRef } from "react";
 import { Avatar } from "../ui/display/Avatar";
 import { cn } from "../../utils/cn";
+import type { AvatarColor } from "../../utils/avatarColor";
 
 export interface NavItemConfig {
   key: string;
   label: string;
+  href?: string;
   icon: React.ReactNode;
   badge?: React.ReactNode;
 }
@@ -14,14 +16,41 @@ export interface MainLayoutUserProfile {
   subtitle?: string;
   avatarUrl?: string;
   initials?: string;
-  color?: string;
+  color?: AvatarColor;
   onClick?: () => void;
+}
+
+export type MainLayoutLinkRenderer = (
+  href: string,
+  children: React.ReactNode,
+  className: string,
+  ariaCurrent?: "page",
+) => React.ReactNode;
+
+export type MainLayoutRouterLinkProps = {
+  to: string;
+  className?: string;
+  "aria-current"?: React.AriaAttributes["aria-current"];
+  children?: React.ReactNode;
+} & React.RefAttributes<HTMLAnchorElement>;
+
+export type MainLayoutLinkComponent =
+  | MainLayoutLinkRenderer
+  | "a"
+  | React.ForwardRefExoticComponent<MainLayoutRouterLinkProps>;
+
+function isRouterLinkComponent(
+  component: MainLayoutLinkComponent,
+): component is React.ForwardRefExoticComponent<MainLayoutRouterLinkProps> {
+  return (typeof component === "object" || typeof component === "function") && "$$typeof" in component;
 }
 
 export interface MainLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   brandName?: string;
   brandLogo?: React.ReactNode;
+  brandHref?: string;
   onBrandClick?: () => void;
+  linkComponent?: MainLayoutLinkComponent;
   navItems: NavItemConfig[];
   activeKey?: string;
   onSelectNav?: (key: string) => void;
@@ -30,24 +59,14 @@ export interface MainLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   onLogout?: () => void;
   logoutLabel?: string;
   header?: React.ReactNode;
-  /** Cho phép hiển thị ở chế độ nhúng (preview) thay vì chiếm full h-screen */
   embedded?: boolean;
 }
 
 const DefaultBrandIcon = (
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="white"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
     <path d="M7 2v20" />
-    <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+    <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
   </svg>
 );
 
@@ -57,7 +76,9 @@ export const MainLayout = forwardRef<HTMLDivElement, MainLayoutProps>(
       className,
       brandName = "Hôm nay ăn gì",
       brandLogo,
+      brandHref,
       onBrandClick,
+      linkComponent,
       navItems,
       activeKey,
       onSelectNav,
@@ -70,164 +91,122 @@ export const MainLayout = forwardRef<HTMLDivElement, MainLayoutProps>(
       children,
       ...props
     },
-    ref
+    ref,
   ) => {
-    const profileInitials =
-      userProfile?.initials ||
-      userProfile?.name
-        .trim()
-        .split(/\s+/)
-        .slice(-2)
-        .map((w) => w[0])
-        .join("")
-        .toUpperCase();
+    const profileInitials = userProfile?.initials
+      ?? userProfile?.name.trim().split(/\s+/).slice(-2).map((part) => part[0] ?? "").join("").toUpperCase();
+    const renderLink: MainLayoutLinkRenderer = (href, content, linkClassName, ariaCurrent) => {
+      if (!linkComponent || linkComponent === "a") {
+        return <a href={href} className={linkClassName} aria-current={ariaCurrent}>{content}</a>;
+      }
+      if (isRouterLinkComponent(linkComponent)) {
+        return createElement(linkComponent, { to: href, className: linkClassName, "aria-current": ariaCurrent }, content);
+      }
+      return linkComponent(href, content, linkClassName, ariaCurrent);
+    };
+
+    const renderNavigationItem = (item: NavItemConfig, mobile = false) => {
+      const active = item.key === activeKey;
+      const itemClassName = cn(
+        "focus-ring min-h-11 cursor-pointer transition-colors",
+        mobile
+          ? "flex flex-col items-center justify-center gap-1 rounded-control px-2 py-1 text-center text-micro"
+          : "flex w-full items-center justify-between gap-3 rounded-card px-3 py-3 text-body-sm font-semibold",
+        active ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      );
+      const content = (
+        <>
+          <span className={cn("flex items-center", mobile ? "flex-col gap-1" : "gap-3")}>
+            <span aria-hidden="true" className={mobile ? "size-5" : "size-5"}>{item.icon}</span>
+            <span>{item.label}</span>
+          </span>
+          {item.badge && <span>{item.badge}</span>}
+        </>
+      );
+
+      if (item.href) {
+        return (
+          <span key={item.key} className={mobile ? "flex-1" : undefined}>
+            {renderLink(item.href, content, itemClassName, active ? "page" : undefined)}
+          </span>
+        );
+      }
+
+      return (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onSelectNav?.(item.key)}
+          aria-current={active ? "page" : undefined}
+          className={cn(itemClassName, mobile && "w-full")}
+        >
+          {content}
+        </button>
+      );
+    };
+
+    const brandContent = (
+      <>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-primary text-primary-foreground">
+          {brandLogo ?? DefaultBrandIcon}
+        </span>
+        <span className="truncate text-heading-sm font-bold text-foreground">{brandName}</span>
+      </>
+    );
 
     return (
       <div
         ref={ref}
-        className={cn(
-          "flex bg-[#fff8f1] overflow-hidden flex-col md:flex-row font-sans text-[#261b17]",
-          embedded ? "h-[640px] rounded-3xl border border-[#eadfd8]" : "h-screen",
-          className
-        )}
+        className={cn("flex h-dvh flex-col overflow-hidden bg-background text-foreground md:flex-row", embedded && "rounded-panel border border-border", className)}
         {...props}
       >
-        {/* Desktop Sidebar */}
-        <aside className="hidden md:flex w-[230px] bg-white border-r border-[#eadfd8] flex-col h-full shrink-0 py-7 px-5">
-          <button
-            type="button"
-            onClick={onBrandClick}
-            className="flex items-center gap-2.5 mb-8 text-left cursor-pointer focus:outline-none"
-          >
-            <div className="bg-[#f05a32] flex items-center justify-center rounded-[12px] size-[38px] shrink-0">
-              {brandLogo || DefaultBrandIcon}
-            </div>
-            <span className="font-extrabold text-[18px] text-[#261b17] tracking-tight truncate">
-              {brandName}
-            </span>
-          </button>
-
+        <a href="#main-content" className="focus-ring sr-only rounded-control bg-card p-3 focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-sticky">
+          Bỏ qua đến nội dung chính
+        </a>
+        <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card px-5 py-6 md:flex">
+          {brandHref || !onBrandClick
+            ? renderLink(brandHref ?? "/", brandContent, "focus-ring mb-8 flex items-center gap-3 rounded-control")
+            : (
+              <button type="button" onClick={onBrandClick} className="focus-ring mb-8 flex items-center gap-3 rounded-control text-left">
+                {brandContent}
+              </button>
+            )}
           <nav className="flex-1 space-y-2" aria-label="Điều hướng chính">
-            {navItems.map((item) => {
-              const active = item.key === activeKey;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onSelectNav?.(item.key)}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-[16px] transition-colors font-bold text-[14px] cursor-pointer",
-                    active
-                      ? "bg-[#ffe0d3] text-[#c63d1c]"
-                      : "bg-white text-[#756761] hover:bg-gray-50 hover:text-[#261b17]"
-                  )}
-                >
-                  <span className="flex items-center gap-3">
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </span>
-                  {item.badge && <span>{item.badge}</span>}
-                </button>
-              );
-            })}
+            {navItems.map((item) => renderNavigationItem(item))}
           </nav>
-
           {sidebarPromo && <div className="mb-4">{sidebarPromo}</div>}
-
           {(userProfile || onLogout) && (
-            <div className="pt-4 border-t border-[#eadfd8] mt-auto flex flex-col gap-2">
+            <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
               {userProfile && (
-                <button
-                  type="button"
-                  onClick={userProfile.onClick}
-                  className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-gray-50 transition-colors text-left cursor-pointer"
-                >
-                  <Avatar
-                    size="sm"
-                    src={userProfile.avatarUrl}
-                    initials={profileInitials}
-                    color={userProfile.color || "bg-purple-500"}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[13px] text-[#261b17] truncate">
-                      {userProfile.name}
-                    </p>
-                    {userProfile.subtitle && (
-                      <p className="text-[#756761] text-[11px] truncate">
-                        {userProfile.subtitle}
-                      </p>
-                    )}
-                  </div>
+                <button type="button" onClick={userProfile.onClick} className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control p-2 text-left hover:bg-muted">
+                  <Avatar size="sm" src={userProfile.avatarUrl} name={userProfile.name} initials={profileInitials} color={userProfile.color} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body-sm font-bold text-foreground">{userProfile.name}</span>
+                    {userProfile.subtitle && <span className="block truncate text-caption text-muted-foreground">{userProfile.subtitle}</span>}
+                  </span>
                 </button>
               )}
-
               {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="flex items-center gap-3 text-red-500 font-bold text-[14px] p-2 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
-                  {logoutLabel}
+                <button type="button" onClick={onLogout} className="focus-ring flex min-h-11 items-center gap-3 rounded-control p-2 text-body-sm font-semibold text-danger-soft-foreground hover:bg-danger-soft">
+                  <span aria-hidden="true">↪</span>{logoutLabel}
                 </button>
               )}
             </div>
           )}
         </aside>
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           {header && <div className="shrink-0">{header}</div>}
-          <main className="flex-1 overflow-y-auto relative">{children}</main>
+          <main id="main-content" className="relative min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+            {children}
+          </main>
         </div>
 
-        {/* Mobile Bottom Navigation */}
-        <nav
-          className="md:hidden border-t border-[#eadfd8] bg-white pt-2 pb-2 px-4 flex justify-around items-center shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
-          aria-label="Điều hướng di động"
-        >
-          {navItems.map((item) => {
-            const active = item.key === activeKey;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onSelectNav?.(item.key)}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex flex-col items-center gap-1 p-1.5 cursor-pointer",
-                  active ? "text-[#f05a32]" : "text-[#756761]"
-                )}
-              >
-                <div
-                  className={cn(
-                    "p-1.5 rounded-xl transition-colors",
-                    active && "bg-[#ffe0d3]"
-                  )}
-                >
-                  {item.icon}
-                </div>
-                <span className="text-[10px] font-bold">{item.label}</span>
-              </button>
-            );
-          })}
+        <nav className="fixed inset-x-0 bottom-0 z-nav flex items-center justify-around border-t border-border bg-card px-3 pt-2 pb-safe shadow-nav md:hidden" aria-label="Điều hướng di động">
+          {navItems.map((item) => renderNavigationItem(item, true))}
         </nav>
       </div>
     );
-  }
+  },
 );
 MainLayout.displayName = "MainLayout";

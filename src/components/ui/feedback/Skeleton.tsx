@@ -5,41 +5,36 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "text" | "circle" | "rect";
   width?: string | number;
   height?: string | number;
-  lines?: number; // only applicable for "text"
+  lines?: number;
 }
 
 export const Skeleton = forwardRef<HTMLDivElement, SkeletonProps>(
   ({ className, variant = "text", width, height, lines = 1, style, ...props }, ref) => {
-    const baseStyle = "bg-gray-200 animate-pulse";
-    
     if (variant === "text" && lines > 1) {
       return (
-        <div ref={ref} className={cn("space-y-2 w-full", className)} style={{ width, ...style }} {...props}>
-          {Array.from({ length: lines }).map((_, i) => (
-            <div 
-              key={i} 
-              className={cn(baseStyle, "h-4 rounded")}
-              style={{ width: i === lines - 1 ? "80%" : "100%" }}
-            />
+        <div ref={ref} className={cn("w-full space-y-2", className)} style={{ width, ...style }} aria-hidden="true" {...props}>
+          {Array.from({ length: lines }, (_, index) => (
+            <div key={index} className="motion-reduce:animate-none h-4 rounded-control bg-muted animate-pulse" style={{ width: index === lines - 1 ? "80%" : "100%" }} />
           ))}
         </div>
       );
     }
 
-    const variants = {
-      text: "h-4 w-full rounded",
-      circle: "rounded-full",
-      rect: "rounded-xl",
-    };
-
     return (
       <div
         ref={ref}
-        className={cn(baseStyle, variants[variant], className)}
+        className={cn(
+          "motion-reduce:animate-none bg-muted animate-pulse",
+          variant === "text" && "h-4 w-full rounded-control",
+          variant === "circle" && "rounded-full",
+          variant === "rect" && "rounded-card",
+          className,
+        )}
         style={{ width, height, ...style }}
+        aria-hidden="true"
         {...props}
       />
     );
-  }
+  },
 );
 Skeleton.displayName = "Skeleton";

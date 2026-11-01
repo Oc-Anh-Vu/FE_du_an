@@ -1,8 +1,8 @@
 import { forwardRef } from "react";
-import { motion } from "framer-motion";
 import { cn } from "../../utils/cn";
 
 export interface AuthLayoutProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+  brandName?: string;
   logo?: React.ReactNode;
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
@@ -11,65 +11,33 @@ export interface AuthLayoutProps extends Omit<React.HTMLAttributes<HTMLDivElemen
 }
 
 const DefaultAuthLogo = (
-  <div className="bg-[#f05a32] flex items-center justify-center rounded-[16px] size-[48px] shadow-sm">
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="white"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+  <span className="flex size-12 items-center justify-center rounded-control bg-primary text-primary-foreground">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
       <path d="M7 2v20" />
-      <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+      <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
     </svg>
-  </div>
+  </span>
 );
 
 export const AuthLayout = forwardRef<HTMLDivElement, AuthLayoutProps>(
-  ({ className, logo, title, subtitle, footer, embedded = false, children, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          "bg-[#fff8f1] flex items-center justify-center p-4 font-sans text-[#261b17]",
-          embedded ? "py-10 rounded-3xl border border-[#eadfd8]" : "min-h-screen",
-          className
+  ({ className, brandName = "Hôm Nay Ăn Gì", logo, title, subtitle, footer, embedded = false, children, ...props }, ref) => (
+    <div ref={ref} className={cn("flex min-h-dvh items-center justify-center bg-background px-4 py-6 text-foreground", embedded && "rounded-panel border border-border", className)} {...props}>
+      <section className="w-full rounded-section bg-card p-4 md:max-w-md md:p-8 md:shadow-raised">
+        <div className="mb-6 flex flex-col items-center gap-2">
+          {logo ?? DefaultAuthLogo}
+          <span className="text-body-sm font-semibold text-muted-foreground">{brandName}</span>
+        </div>
+        {(title || subtitle) && (
+          <header className="mb-6 text-center">
+            {title && <h1 tabIndex={-1} className="text-title text-foreground md:text-title-lg">{title}</h1>}
+            {subtitle && <p className="mt-2 text-body-sm text-muted-foreground">{subtitle}</p>}
+          </header>
         )}
-        {...props}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="w-full max-w-md bg-white border border-[#eadfd8] rounded-[24px] p-6 md:p-8 shadow-sm"
-        >
-          <div className="flex justify-center mb-6">
-            {logo || DefaultAuthLogo}
-          </div>
-
-          {(title || subtitle) && (
-            <div className="text-center mb-8">
-              {title && (
-                <h1 className="text-[24px] font-bold text-[#261b17] tracking-tight">
-                  {title}
-                </h1>
-              )}
-              {subtitle && (
-                <p className="text-[#756761] mt-2 text-[14px]">{subtitle}</p>
-              )}
-            </div>
-          )}
-
-          <div>{children}</div>
-
-          {footer && <div className="mt-8 text-center text-[14px] text-[#756761]">{footer}</div>}
-        </motion.div>
-      </div>
-    );
-  }
+        {children}
+        {footer && <footer className="mt-6 text-center text-body-sm text-muted-foreground">{footer}</footer>}
+      </section>
+    </div>
+  ),
 );
 AuthLayout.displayName = "AuthLayout";

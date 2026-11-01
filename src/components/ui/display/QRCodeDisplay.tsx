@@ -1,77 +1,85 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { Card } from "./Card";
+import { Button } from "../form/Button";
+import { Skeleton } from "../feedback/Skeleton";
 import { formatVND } from "../../../utils/currencyFormat";
 import { cn } from "../../../utils/cn";
 
-export interface QRCodeDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
-  qrSrc?: string;           
-  loading?: boolean;        
-  amount: number;           
+export interface QRCodeDisplayProps extends React.HTMLAttributes<HTMLElement> {
+  qrSrc?: string;
+  loading?: boolean;
+  hasError?: boolean;
+  amount: number;
   receiverName: string;
   bankName?: string;
-  accountNo?: string;       
-  note?: string;            
-  onImageError?: () => void;
-  hasError?: boolean;
+  accountNo?: string;
+  note?: string;
+  onRetry?: () => void;
 }
 
-export const QRCodeDisplay = forwardRef<HTMLDivElement, QRCodeDisplayProps>(
-  ({ className, qrSrc, loading, amount, receiverName, bankName, accountNo, note, onImageError, hasError, ...props }, ref) => {
+export const QRCodeDisplay = forwardRef<HTMLElement, QRCodeDisplayProps>(
+  ({ className, qrSrc, loading = false, hasError = false, amount, receiverName, bankName, accountNo, note, onRetry, ...props }, ref) => {
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const imageFailed = Boolean(qrSrc && failedSrc === qrSrc);
+    const showError = hasError || imageFailed;
+
     return (
-      <Card ref={ref} className={cn("max-w-xs mx-auto text-center overflow-hidden", className)} padding="none" {...props}>
-        <div className="bg-[#f05a32] p-4 text-white text-center">
-          <p className="text-[14px] opacity-90 mb-1">Thanh toán cho</p>
-          <p className="font-bold text-[18px] leading-tight">{receiverName}</p>
-        </div>
-        
-        <div className="p-6 flex flex-col items-center">
-          <div className="size-48 bg-white border border-[#eadfd8] rounded-2xl flex items-center justify-center mb-4 relative overflow-hidden">
-            {loading ? (
-              <div className="absolute inset-0 bg-gray-100 animate-pulse" />
-            ) : hasError || !qrSrc ? (
-              <div className="text-center p-4">
-                <p className="text-[#f05a32] font-bold text-[14px] mb-1">Không tải được mã QR</p>
-                <p className="text-[#756761] text-[12px]">Vui lòng chuyển khoản thủ công</p>
-              </div>
-            ) : (
-              <img 
-                src={qrSrc} 
-                alt="Mã QR Thanh toán" 
-                className="w-full h-full object-contain"
-                onError={onImageError}
-              />
-            )}
-          </div>
-          
-          <div className="space-y-3 w-full text-left">
-            <div className="flex justify-between items-baseline">
-              <span className="text-[13px] text-[#756761]">Số tiền</span>
-              <span className="text-[20px] font-bold text-[#f05a32]">{formatVND(amount)}đ</span>
+    <Card
+      ref={ref}
+      className={cn("mx-auto max-w-xs text-center", className)}
+      padding="none"
+      {...props}
+    >
+      <div className="bg-primary-hover p-4 text-primary-foreground">
+        <p className="text-caption">Thanh toán cho</p>
+        <p className="text-heading-sm font-bold">{receiverName}</p>
+      </div>
+      <div className="flex flex-col items-center p-6">
+        <div className="mb-4 flex size-48 items-center justify-center overflow-hidden rounded-panel border border-border bg-card" aria-busy={loading}>
+          {loading ? (
+            <Skeleton variant="rect" width="100%" height="100%" aria-label="Đang tải mã QR" />
+          ) : showError || !qrSrc ? (
+            <div className="space-y-2 p-4">
+              <p className="text-body-sm font-semibold text-danger-soft-foreground">Không tải được mã QR</p>
+              <p className="text-caption text-muted-foreground">Vui lòng chuyển khoản thủ công</p>
+              {onRetry && <Button size="sm" variant="outline" onClick={() => { setFailedSrc(null); onRetry(); }}>Thử lại</Button>}
             </div>
-            {bankName && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-[13px] text-[#756761]">Ngân hàng</span>
-                <span className="text-[14px] font-bold text-[#261b17]">{bankName}</span>
-              </div>
-            )}
-            {accountNo && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-[13px] text-[#756761]">Số tài khoản</span>
-                <span className="text-[14px] font-bold text-[#261b17]">
-                  {hasError ? accountNo : `•••• ${accountNo.slice(-4)}`}
-                </span>
-              </div>
-            )}
-            {note && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-[13px] text-[#756761]">Nội dung</span>
-                <span className="text-[14px] font-bold text-[#261b17] text-right break-words max-w-[60%]">{note}</span>
-              </div>
-            )}
-          </div>
+          ) : (
+            <img
+              src={qrSrc}
+              alt={`Mã VietQR chuyển ${formatVND(amount)} đồng cho ${receiverName}`}
+              className="h-full w-full object-contain"
+              onError={() => setFailedSrc(qrSrc)}
+            />
+          )}
         </div>
-      </Card>
+        <dl className="w-full space-y-3 text-left">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-caption text-muted-foreground">Số tiền</dt>
+            <dd className="text-heading-sm font-bold tabular-nums text-primary-strong">{formatVND(amount)}đ</dd>
+          </div>
+          {bankName && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-caption text-muted-foreground">Ngân hàng</dt>
+              <dd className="text-body-sm font-semibold text-foreground">{bankName}</dd>
+            </div>
+          )}
+          {accountNo && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-caption text-muted-foreground">Số tài khoản</dt>
+              <dd className="text-body-sm font-semibold text-foreground">{showError ? accountNo : `•••• ${accountNo.slice(-4)}`}</dd>
+            </div>
+          )}
+          {note && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-caption text-muted-foreground">Nội dung</dt>
+              <dd className="max-w-48 break-words text-right text-body-sm font-semibold text-foreground">{note}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+    </Card>
     );
-  }
+  },
 );
 QRCodeDisplay.displayName = "QRCodeDisplay";
