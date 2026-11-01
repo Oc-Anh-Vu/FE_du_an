@@ -1,4 +1,4 @@
-// Khung store giao diện toàn cục (Toast & Modal lời mời vào phòng)
+// Store quản lý trạng thái giao diện toàn cục: Toast thông báo & Modal lời mời vào phòng (FE_SPEC.md Mục 5.2)
 import { create } from 'zustand';
 
 export type ToastType = 'success' | 'warning' | 'danger' | 'info';
@@ -43,21 +43,40 @@ export const initialInviteModalState: InviteModalState = {
   payload: null,
 };
 
-export const useUIStore = create<UIStoreState>(() => ({
+export const useUIStore = create<UIStoreState>((set) => ({
   toast: initialToastState,
   inviteModal: initialInviteModalState,
-  showToast: () => {
-    // coming soon
-  },
-  hideToast: () => {
-    // coming soon
-  },
-  openInviteModal: () => {
-    // coming soon
-  },
-  closeInviteModal: () => {
-    // coming soon
-  },
+
+  showToast: (type, message, duration) =>
+    set({
+      toast: {
+        isVisible: true,
+        type,
+        message,
+        ...(duration !== undefined ? { duration } : {}),
+      },
+    }),
+
+  hideToast: () =>
+    set((state) => ({
+      toast: {
+        ...state.toast,
+        isVisible: false,
+      },
+    })),
+
+  openInviteModal: (payload) =>
+    set({
+      inviteModal: {
+        isOpen: true,
+        payload,
+      },
+    }),
+
+  closeInviteModal: () =>
+    set({
+      inviteModal: initialInviteModalState,
+    }),
 }));
 
 export default useUIStore;
