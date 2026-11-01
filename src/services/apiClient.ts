@@ -18,7 +18,6 @@ export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:8080';
 const DEFAULT_TIMEOUT_MS = 15000;
 
-// Các endpoint xác thực công khai không kích hoạt xóa phiên/redirect khi gặp HTTP 401
 const PUBLIC_AUTH_ENDPOINTS = [
   '/api/v1/auth/token',
   '/api/v1/auth/introspect',
@@ -27,8 +26,6 @@ const PUBLIC_AUTH_ENDPOINTS = [
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
 ] as const;
-
-const GUEST_OTP_PATHS = ['/verify', '/forgot-password', '/reset-password'] as const;
 
 export interface ApiClientAuthHooks {
   getToken?: () => string | null;
@@ -83,9 +80,15 @@ function isPublicAuthEndpoint(url?: string): boolean {
   return PUBLIC_AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 }
 
-function isGuestOtpRoute(): boolean {
-  if (typeof window === 'undefined') return false;
-  return GUEST_OTP_PATHS.some((path) => window.location.pathname.startsWith(path));
+function isPublicSignupEndpoint(url?: string, method?: string): boolean {
+  if (!url) return false;
+  const normalizedMethod = (method ?? 'GET').toUpperCase();
+  const cleanPath = url.split('?')[0].replace(/\/+$/, '');
+  return normalizedMethod === 'POST' && cleanPath.endsWith('/api/v1/users');
+}
+
+function isPublicEndpoint(url?: string, method?: string): boolean {
+  return isPublicAuthEndpoint(url) || isPublicSignupEndpoint(url, method);
 }
 
 // Kiểm tra một đối tượng lỗi có phải là ApiError đã chuẩn hóa hay không
@@ -142,11 +145,9 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Request Interceptor: tự động đính kèm Authorization: Bearer <token>
+// Request Interceptor: tự động đính kèm Authorization: Bearer <token> cho các endpoint yêu cầu xác thực
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const isTokenOrIntrospect =
-    config.url?.includes('/api/v1/auth/token') || config.url?.includes('/api/v1/auth/introspect');
-  if (!isTokenOrIntrospect) {
+  if (!isPublicEndpoint(config.url, config.method)) {
     const token = getAccessToken();
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -155,7 +156,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Response Interceptor: bóc tách ApiResponse<T> và kích hoạt callback khi gặp HTTP 401 hợp lệ
+// Response Interceptor: bóc tách ApiResponse<T> và kích hoạt callback khi gặp HTTP 401 (code 1002 - UNAUTHENTICATED)
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>) => {
     const payload = response.data;
@@ -176,13 +177,12 @@ apiClient.interceptors.response.use(
   (error: unknown) => {
     const normalized = normalizeApiError(error);
     const requestUrl = axios.isAxiosError(error) ? error.config?.url : undefined;
-    // Chỉ kích hoạt khi HTTP status === 401 (loại trừ HTTP 400 USER_EXISTED, LOGIN_FAILED 1006 và 4 API OTP/Quên mật khẩu)
+    const requestMethod = axios.isAxiosError(error) ? error.config?.method : undefined;
+    // Chỉ kích hoạt khi HTTP status === 401 (mã 1002 UNAUTHENTICATED), loại trừ LOGIN_FAILED (1006) và các PUBLIC_ENDPOINTS
     const shouldTriggerUnauthorized =
       normalized.status === 401 &&
       normalized.code !== ApiErrorCode.LOGIN_FAILED &&
-      normalized.code !== ApiErrorCode.USER_EXISTED &&
-      !isPublicAuthEndpoint(requestUrl) &&
-      !isGuestOtpRoute();
+      !isPublicEndpoint(requestUrl, requestMethod);
 
     if (shouldTriggerUnauthorized) {
       clearStoredAccessToken();
