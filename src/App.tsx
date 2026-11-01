@@ -1,122 +1,181 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { MotionConfig } from "framer-motion"
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom"
+import {
+  Compass,
+  Home as HomeIcon,
+  Settings2,
+  UsersRound,
+  WalletCards,
+} from "lucide-react"
+import { MainLayout, type NavItemConfig } from "./components/layout"
+import { PublicLayout } from "./components/layout"
+import Home from "./pages/Home"
+import NotFound from "./pages/NotFound"
+import Login from "./pages/auth/Login"
+import Signup from "./pages/auth/Signup"
+import Verify from "./pages/auth/Verify"
+import ForgotPassword from "./pages/auth/ForgotPassword"
+import ResetPassword from "./pages/auth/ResetPassword"
+import Dashboard from "./pages/app/Dashboard"
+import Explore from "./pages/app/Explore"
+import Friends from "./pages/app/Friends"
+import Billing from "./pages/app/Billing"
+import Profile from "./pages/app/Profile"
+import RoomHome from "./pages/app/room/RoomHome"
+import RoomNew from "./pages/app/room/RoomNew"
+import Join from "./pages/app/room/Join"
+import Match from "./pages/app/room/Match"
+import MatchmakingQueue from "./pages/app/room/MatchmakingQueue"
+import Lobby from "./pages/app/room/Lobby"
+import Swipe from "./pages/app/room/Swipe"
+import Summary from "./pages/app/room/Summary"
+import AdminDashboard from "./pages/admin/AdminDashboard"
+import UsersManagement from "./pages/admin/UsersManagement"
+import PlacesManagement from "./pages/admin/PlacesManagement"
+import TagsManagement from "./pages/admin/TagsManagement"
 
-function App() {
-  const [count, setCount] = useState(0)
+const userNavItems: NavItemConfig[] = [
+  { key: "home", label: "Trang chủ", icon: <HomeIcon aria-hidden="true" size={20} /> },
+  { key: "explore", label: "Khám phá", icon: <Compass aria-hidden="true" size={20} /> },
+  { key: "friends", label: "Hội ăn", icon: <UsersRound aria-hidden="true" size={20} /> },
+  { key: "billing", label: "Tài chính", icon: <WalletCards aria-hidden="true" size={20} /> },
+]
+
+const adminNavItems: NavItemConfig[] = [
+  { key: "overview", label: "Tổng quan", icon: <HomeIcon aria-hidden="true" size={20} /> },
+  { key: "users", label: "Người dùng", icon: <UsersRound aria-hidden="true" size={20} /> },
+  { key: "places", label: "Địa điểm", icon: <Compass aria-hidden="true" size={20} /> },
+  { key: "tags", label: "Tags hệ thống", icon: <Settings2 aria-hidden="true" size={20} /> },
+]
+
+function WorkspaceLayout({ kind }: { kind: "user" | "admin" }) {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const isAdmin = kind === "admin"
+  const navItems = isAdmin ? adminNavItems : userNavItems
+  const activeKey = isAdmin
+    ? pathname.startsWith("/admin/users")
+      ? "users"
+      : pathname.startsWith("/admin/places")
+        ? "places"
+        : pathname.startsWith("/admin/tags")
+          ? "tags"
+          : "overview"
+    : pathname.startsWith("/app/explore")
+      ? "explore"
+      : pathname.startsWith("/app/friends")
+        ? "friends"
+        : pathname.startsWith("/app/billing")
+          ? "billing"
+          : "home"
+
+  const destinations: Record<string, string> = isAdmin
+    ? {
+        overview: "/admin",
+        users: "/admin/users",
+        places: "/admin/places",
+        tags: "/admin/tags",
+      }
+    : {
+        home: "/app",
+        explore: "/app/explore",
+        friends: "/app/friends",
+        billing: "/app/billing",
+      }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <MainLayout
+      brandName={isAdmin ? "HNAG Admin" : "Hôm nay ăn gì"}
+      navItems={navItems}
+      activeKey={activeKey}
+      onBrandClick={() => navigate(isAdmin ? "/admin" : "/app")}
+      onSelectNav={(key) => navigate(destinations[key] ?? (isAdmin ? "/admin" : "/app"))}
+      sidebarPromo={
+        <Link
+          className="focus-ring block rounded-panel bg-surface-dark p-4 text-sm font-semibold text-surface-dark-foreground"
+          to={isAdmin ? "/app" : "/app/room"}
         >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+          {isAdmin ? "Mở khu vực người dùng" : "Tạo phòng, rủ hội đi ăn"}
+        </Link>
+      }
+    >
+      <Outlet />
+    </MainLayout>
   )
 }
 
-export default App
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route
+        element={
+          <PublicLayout
+            renderLink={(href, children, className) => (
+              <Link className={className} to={href}>
+                {children}
+              </Link>
+            )}
+          >
+            <Outlet />
+          </PublicLayout>
+        }
+      >
+        <Route path="/" element={<Home />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/verify" element={<Verify />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+
+      <Route path="/app" element={<WorkspaceLayout kind="user" />}>
+        <Route index element={<Dashboard />} />
+        <Route path="explore" element={<Explore />} />
+        <Route path="friends" element={<Friends />} />
+        <Route path="billing" element={<Billing />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="room">
+          <Route index element={<RoomHome />} />
+          <Route path="new" element={<RoomNew />} />
+          <Route path="join" element={<Join />} />
+          <Route path="match" element={<Match />} />
+          <Route path="queue" element={<MatchmakingQueue />} />
+          <Route path=":id">
+            <Route index element={<Navigate replace to="lobby" />} />
+            <Route path="lobby" element={<Lobby />} />
+            <Route path="swipe" element={<Swipe />} />
+            <Route path="summary" element={<Summary />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="/admin" element={<WorkspaceLayout kind="admin" />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<UsersManagement />} />
+        <Route path="places" element={<PlacesManagement />} />
+        <Route path="tags" element={<TagsManagement />} />
+      </Route>
+    </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </MotionConfig>
+  )
+}
