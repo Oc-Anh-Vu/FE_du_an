@@ -169,9 +169,7 @@ apiClient.interceptors.response.use(
         };
         return Promise.reject(appError);
       }
-      if ('result' in payload) {
-        response.data = payload.result as ApiResponse<unknown>;
-      }
+      response.data = payload.result as ApiResponse<unknown>;
     }
     return response;
   },
@@ -197,7 +195,12 @@ apiClient.interceptors.response.use(
 // Trích xuất dữ liệu kết quả T (hỗ trợ cả response đã được Interceptor bóc tách hoặc ApiResponse<T> gốc)
 export function unwrapApiResponse<T>(response: AxiosResponse<ApiResponse<T> | T>): T {
   const data = response.data;
-  if (data && typeof data === 'object' && 'result' in data && 'code' in data) {
+  if (
+    data &&
+    typeof data === 'object' &&
+    'code' in data &&
+    typeof (data as { code?: unknown }).code === 'number'
+  ) {
     return (data as ApiResponse<T>).result;
   }
   return data as T;
