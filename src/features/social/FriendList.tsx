@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Client } from "@stomp/stompjs";
+import { Avatar } from "../../components/ui/display/Avatar";
+import { EmptyState } from "../../components/ui/feedback/EmptyState";
 
 type Friend = {
   id: string;
@@ -13,34 +16,45 @@ type PresenceEvent = {
 
 type FriendListProps = {
   friends: Friend[];
-  subscribePresence: (onMessage: (payload: string) => void) => () => void;
+  socketClient?: Client;
+  socketConnected?: boolean;
+  presenceTopic?: string;
+  subscribePresence?: (onMessage: (payload: string) => void) => () => void;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function parsePresenceEvent(payload: string): PresenceEvent | null {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(payload);
-
-    if (typeof parsed !== "object" || parsed === null) return null;
-
-    const event = parsed as Record<string, unknown>;
-    if (
-      typeof event.userId !== "string" ||
-      (event.status !== "ONLINE" && event.status !== "OFFLINE")
-    ) {
-      return null;
-    }
-
-    return {
-      userId: event.userId,
-      status: event.status,
-    };
-  } catch {
+    parsed = JSON.parse(payload);
+  } catch (error) {
+    console.error("Không thể đọc cập nhật trạng thái bạn bè từ WebSocket.", error);
     return null;
   }
+
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.userId !== "string" ||
+    !parsed.userId ||
+    (parsed.status !== "ONLINE" && parsed.status !== "OFFLINE")
+  ) {
+    return null;
+  }
+
+  return {
+    userId: parsed.userId,
+    status: parsed.status,
+  };
 }
 
 export default function FriendList({
   friends,
+  socketClient,
+  socketConnected = false,
+  presenceTopic,
   subscribePresence,
 }: FriendListProps) {
   const [onlineFriendIds, setOnlineFriendIds] = useState<Set<string>>(
@@ -48,7 +62,7 @@ export default function FriendList({
   );
 
   useEffect(() => {
-    return subscribePresence((payload) => {
+    const handlePresence = (payload: string) => {
       const event = parsePresenceEvent(payload);
       if (!event) return;
 
@@ -63,8 +77,23 @@ export default function FriendList({
 
         return nextIds;
       });
-    });
-  }, [subscribePresence]);
+    };
+
+    if (presenceTopic && socketConnected && socketClient?.connected) {
+      const subscription = socketClient.subscribe(presenceTopic, (message) => {
+        handlePresence(message.body);
+      });
+
+      return () => subscription.unsubscribe();
+    }
+
+    return subscribePresence?.(handlePresence);
+  }, [
+    presenceTopic,
+    socketClient,
+    socketConnected,
+    subscribePresence,
+  ]);
 
   const sortedFriends = useMemo(
     () =>
@@ -83,45 +112,38 @@ export default function FriendList({
   return (
     <section className="w-full max-w-md" aria-label="Danh sách bạn bè">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900">Bạn bè</h2>
-        <span className="text-sm text-gray-500">{onlineCount} đang online</span>
+        <h2 className="text-heading-sm font-bold text-foreground">Bạn bè</h2>
+        <span className="text-body-sm text-muted-foreground" aria-live="polite">
+          {onlineCount} đang online
+        </span>
       </header>
 
       {sortedFriends.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-500">Chưa có bạn bè</p>
+        <EmptyState
+          title="Chưa có bạn bè"
+          description="Kết bạn để cùng nhau tìm quán ăn nhé."
+          size="sm"
+        />
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border">
           {sortedFriends.map((friend) => {
             const isOnline = onlineFriendIds.has(friend.id);
 
             return (
-              <li key={friend.id} className="flex items-center gap-3 py-3">
-                <div className="relative h-10 w-10 shrink-0">
-                  {friend.avatarUrl ? (
-                    <img
-                      src={friend.avatarUrl}
-                      alt=""
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      aria-hidden="true"
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 font-medium text-gray-600"
-                    >
-                      {friend.username.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-
-                  <span
-                    aria-label={isOnline ? "Đang online" : "Offline"}
-                    title={isOnline ? "Đang online" : "Offline"}
-                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
-                      isOnline ? "bg-green-500" : "bg-gray-300"
-                    }`}
-                  />
-                </div>
-
-                <span className="truncate text-sm font-medium text-gray-800">
+              <li
+                key={friend.id}
+                className="flex items-center gap-3 py-3"
+                aria-label={`${friend.username}, ${
+                  isOnline ? "đang online" : "offline"
+                }`}
+              >
+                <Avatar
+                  src={friend.avatarUrl ?? undefined}
+                  name={friend.username}
+                  size="md"
+                  isOnline={isOnline}
+                />
+                <span className="truncate text-body font-semibold text-foreground">
                   {friend.username}
                 </span>
               </li>
