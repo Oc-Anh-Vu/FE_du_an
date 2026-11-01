@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Client } from "@stomp/stompjs";
+import { Button } from "../../components/ui/form/Button";
+import { Modal } from "../../components/ui/feedback/Modal";
 
 type RoomInvitation = {
   invitationId: string;
@@ -15,80 +18,139 @@ type PendingAction = {
 };
 
 type InvitePopupProps = {
-  subscribeInvitations: (onMessage: (payload: string) => void) => () => void;
+  socketClient?: Client;
+  socketConnected?: boolean;
+  invitationTopic?: string;
+  subscribeInvitations?: (
+    onMessage: (payload: string) => void,
+  ) => () => void;
   respondToInvitation: (
     invitationId: string,
     decision: InviteDecision,
   ) => Promise<void>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function parseInvitation(payload: string): RoomInvitation | null {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(payload);
-    if (typeof parsed !== "object" || parsed === null) return null;
-
-    const event = parsed as Record<string, unknown>;
-
-    if (
-      typeof event.invitationId !== "string" ||
-      typeof event.roomId !== "string" ||
-      typeof event.inviterName !== "string"
-    ) {
-      return null;
-    }
-
-    return {
-      invitationId: event.invitationId,
-      roomId: event.roomId,
-      inviterName: event.inviterName,
-      roomName:
-        typeof event.roomName === "string" ? event.roomName : "phòng ăn",
-    };
-  } catch {
+    parsed = JSON.parse(payload);
+  } catch (error) {
+    console.error("Không thể đọc lời mời vào phòng từ WebSocket.", error);
     return null;
   }
+
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.invitationId !== "string" ||
+    !parsed.invitationId ||
+    typeof parsed.roomId !== "string" ||
+    !parsed.roomId ||
+    typeof parsed.inviterName !== "string" ||
+    !parsed.inviterName
+  ) {
+    return null;
+  }
+
+  return {
+    invitationId: parsed.invitationId,
+    roomId: parsed.roomId,
+    inviterName: parsed.inviterName,
+    roomName:
+      typeof parsed.roomName === "string" && parsed.roomName
+        ? parsed.roomName
+        : "phòng ăn",
+  };
 }
 
 export default function InvitePopup({
+  socketClient,
+  socketConnected = false,
+  invitationTopic,
   subscribeInvitations,
   respondToInvitation,
 }: InvitePopupProps) {
-  const [invitation, setInvitation] = useState<RoomInvitation | null>(null);
+  const [invitations, setInvitations] = useState<RoomInvitation[]>([]);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const responseInProgress = useRef(false);
+  const invitation = invitations[0] ?? null;
 
   useEffect(() => {
-    return subscribeInvitations((payload) => {
+    const handleInvitation = (payload: string) => {
       const nextInvitation = parseInvitation(payload);
       if (!nextInvitation) return;
 
-      setInvitation(nextInvitation);
-      setPendingAction(null);
-      setError(null);
-    });
-  }, [subscribeInvitations]);
+      setInvitations((currentInvitations) => {
+        if (
+          currentInvitations.some(
+            (current) => current.invitationId === nextInvitation.invitationId,
+          )
+        ) {
+          return currentInvitations;
+        }
+        return [...currentInvitations, nextInvitation];
+      });
+    };
+
+    if (
+      invitationTopic &&
+      socketConnected &&
+      socketClient?.connected
+    ) {
+      const subscription = socketClient.subscribe(
+        invitationTopic,
+        (message) => handleInvitation(message.body),
+      );
+
+      return () => subscription.unsubscribe();
+    }
+
+    return subscribeInvitations?.(handleInvitation);
+  }, [
+    invitationTopic,
+    socketClient,
+    socketConnected,
+    subscribeInvitations,
+  ]);
 
   async function handleResponse(decision: InviteDecision) {
-    if (!invitation) return;
+    if (!invitation || responseInProgress.current) return;
 
     const invitationId = invitation.invitationId;
+    responseInProgress.current = true;
     setPendingAction({ invitationId, decision });
     setError(null);
 
     try {
       await respondToInvitation(invitationId, decision);
-      setInvitation((current) =>
-        current?.invitationId === invitationId ? null : current,
+      setInvitations((current) =>
+        current.filter((item) => item.invitationId !== invitationId),
       );
-    } catch {
-      setError("Không thể gửi phản hồi. Vui lòng thử lại.");
+      setError(null);
+    } catch (responseError) {
+      setError(
+        responseError instanceof Error
+          ? responseError.message
+          : "Không thể gửi phản hồi. Vui lòng thử lại.",
+      );
     } finally {
+      responseInProgress.current = false;
       setPendingAction((current) =>
         current?.invitationId === invitationId ? null : current,
       );
     }
+  }
+
+  function closeInvitation() {
+    if (responseInProgress.current) return;
+    setInvitations((current) => current.slice(1));
+    setError(null);
   }
 
   if (!invitation) return null;
@@ -96,57 +158,47 @@ export default function InvitePopup({
   const isPending = pendingAction?.invitationId === invitation.invitationId;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="room-invitation-title"
-        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl"
-      >
-        <h2
-          id="room-invitation-title"
-          className="text-lg font-semibold text-gray-900"
-        >
-          Lời mời vào phòng
-        </h2>
-
-        <p className="mt-2 text-sm leading-6 text-gray-600">
-          <span className="font-medium text-gray-900">
-            {invitation.inviterName}
-          </span>{" "}
-          mời bạn tham gia {invitation.roomName}.
-        </p>
-
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-red-600">
-            {error}
-          </p>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
+    <Modal
+      isOpen
+      onClose={closeInvitation}
+      title="Lời mời vào phòng"
+      size="sm"
+      closeOnOverlayClick={!isPending}
+      closeOnEsc={!isPending}
+      footer={
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
             disabled={isPending}
+            loading={pendingAction?.decision === "DECLINE" && isPending}
+            loadingText="Đang từ chối..."
             onClick={() => void handleResponse("DECLINE")}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pendingAction?.decision === "DECLINE" && isPending
-              ? "Đang từ chối..."
-              : "Từ chối"}
-          </button>
-
-          <button
-            type="button"
+            Từ chối
+          </Button>
+          <Button
             disabled={isPending}
+            loading={pendingAction?.decision === "ACCEPT" && isPending}
+            loadingText="Đang tham gia..."
             onClick={() => void handleResponse("ACCEPT")}
-            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pendingAction?.decision === "ACCEPT" && isPending
-              ? "Đang tham gia..."
-              : "Tham gia"}
-          </button>
+            Tham gia
+          </Button>
         </div>
-      </section>
-    </div>
+      }
+    >
+      <p className="text-body text-muted-foreground">
+        <span className="font-semibold text-foreground">
+          {invitation.inviterName}
+        </span>{" "}
+        mời bạn tham gia {invitation.roomName}.
+      </p>
+
+      {error && (
+        <p role="alert" className="mt-3 text-body-sm text-danger">
+          {error}
+        </p>
+      )}
+    </Modal>
   );
 }
