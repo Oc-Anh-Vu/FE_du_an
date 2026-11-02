@@ -1,162 +1,259 @@
-import { useRef, useState, type FormEvent, type FocusEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// Biểu mẫu đăng ký tài khoản mới: kiểm tra mã lỗi 1101, 1102, 1103, 1005 và phát onSignupSuccess
+import { useRef, useState, type FocusEvent, type FormEvent } from 'react';
 import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input, PasswordInput } from '../../components/ui/form';
+import { Stack } from '../../components/layout/Stack';
 import { normalizeApiError } from '../../services/apiClient';
-import { register } from '../../services/authService';
+import { userService } from '../../services/user.service';
+import { useUIStore } from '../../store/uiStore';
+import { ApiErrorCode, type UserResponse } from '../../types';
+import { cn } from '../../utils/cn';
 
 type SignupField = 'username' | 'email' | 'password';
-type FieldErrors = Partial<Record<SignupField, string>>;
+type SignupFieldErrors = Partial<Record<SignupField, string>>;
 
-interface SignupValues {
+interface SignupFormValues {
   username: string;
   email: string;
   password: string;
 }
 
-function validateField(field: SignupField, values: SignupValues): string | undefined {
+export interface SignupFormProps {
+  defaultUsername?: string;
+  defaultEmail?: string;
+  onSignupSuccess?: (email: string, username: string, user: UserResponse) => void;
+  className?: string;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateSignupField(field: SignupField, values: SignupFormValues): string | undefined {
   switch (field) {
-    case 'username':
-      return values.username.trim().length < 3
-        ? 'Tên đăng nhập phải có ít nhất 3 ký tự.'
-        : undefined;
-    case 'email':
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())
-        ? undefined
-        : 'Vui lòng nhập email hợp lệ.';
-    case 'password':
-      return values.password.length < 6
-        ? 'Mật khẩu phải có ít nhất 6 ký tự.'
-        : undefined;
+    case 'username': {
+      const trimmed = values.username.trim();
+      if (!trimmed) {
+        return 'Vui lòng nhập tên đăng nhập.';
+      }
+      if (trimmed.length < 3) {
+        return 'Tên đăng nhập phải có ít nhất 3 ký tự.';
+      }
+      return undefined;
+    }
+    case 'email': {
+      const trimmed = values.email.trim();
+      if (!trimmed) {
+        return 'Vui lòng nhập địa chỉ email.';
+      }
+      if (!EMAIL_PATTERN.test(trimmed)) {
+        return 'Email không đúng định dạng.';
+      }
+      return undefined;
+    }
+    case 'password': {
+      if (!values.password) {
+        return 'Vui lòng nhập mật khẩu.';
+      }
+      if (values.password.length < 6) {
+        return 'Mật khẩu phải có ít nhất 6 ký tự.';
+      }
+      return undefined;
+    }
   }
 }
 
-function validateValues(values: SignupValues): FieldErrors {
+function validateAllSignupFields(values: SignupFormValues): SignupFieldErrors {
   return {
-    username: validateField('username', values),
-    email: validateField('email', values),
-    password: validateField('password', values),
+    username: validateSignupField('username', values),
+    email: validateSignupField('email', values),
+    password: validateSignupField('password', values),
   };
 }
 
-function firstInvalidField(errors: FieldErrors): SignupField | undefined {
-  return (['username', 'email', 'password'] as const).find((field) => errors[field]);
+function resolveSignupServerError(code: number, fallbackMessage: string): string {
+  switch (code) {
+    case ApiErrorCode.USER_EXISTED:
+      return 'Tên đăng nhập hoặc email đã tồn tại. Vui lòng sử dụng thông tin khác.';
+    case ApiErrorCode.USERNAME_INVALID:
+      return 'Tên đăng nhập phải có ít nhất 3 ký tự.';
+    case ApiErrorCode.PASSWORD_INVALID:
+      return 'Mật khẩu phải có ít nhất 6 ký tự.';
+    case ApiErrorCode.EMAIL_INVALID:
+      return 'Email không đúng định dạng.';
+    default:
+      return fallbackMessage || 'Không thể tạo tài khoản, vui lòng thử lại.';
+  }
 }
 
-export default function SignupForm() {
-  const navigate = useNavigate();
-  const usernameRef = useRef<HTMLInputElement>(null);
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-  const [values, setValues] = useState<SignupValues>({
-    username: '',
-    email: '',
+export function SignupForm({
+  defaultUsername = '',
+  defaultEmail = '',
+  onSignupSuccess,
+  className,
+}: SignupFormProps) {
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  const [values, setValues] = useState<SignupFormValues>({
+    username: defaultUsername,
+    email: defaultEmail,
     password: '',
   });
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [fieldErrors, setFieldErrors] = useState<SignupFieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function updateField(field: SignupField, value: string) {
-    setValues((current) => ({ ...current, [field]: value }));
+  function updateField(field: SignupField, nextValue: string) {
+    setValues((prev) => ({ ...prev, [field]: nextValue }));
     setServerError(null);
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
   }
 
   function handleBlur(field: SignupField, event: FocusEvent<HTMLInputElement>) {
-    setFieldErrors((current) => ({
-      ...current,
-      [field]: validateField(field, { ...values, [field]: event.currentTarget.value }),
+    const nextValues = { ...values, [field]: event.currentTarget.value };
+    setFieldErrors((prev) => ({
+      ...prev,
+      [field]: validateSignupField(field, nextValues),
     }));
   }
 
-  function focusField(field: SignupField | undefined) {
-    if (field === 'username') usernameRef.current?.focus();
-    if (field === 'email') emailRef.current?.focus();
-    if (field === 'password') passwordRef.current?.focus();
+  function focusFirstInvalidField(errors: SignupFieldErrors) {
+    if (errors.username) {
+      usernameInputRef.current?.focus();
+      return;
+    }
+    if (errors.email) {
+      emailInputRef.current?.focus();
+      return;
+    }
+    if (errors.password) {
+      passwordInputRef.current?.focus();
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setServerError(null);
-    const errors = validateValues(values);
+
+    const errors = validateAllSignupFields(values);
     setFieldErrors(errors);
-    const invalidField = firstInvalidField(errors);
-    if (invalidField) {
-      focusField(invalidField);
+    if (errors.username || errors.email || errors.password) {
+      focusFirstInvalidField(errors);
       return;
     }
 
+    const normalizedUsername = values.username.trim();
+    const normalizedEmail = values.email.trim();
+
     setLoading(true);
     try {
-      await register({
-        username: values.username.trim(),
-        email: values.email.trim(),
+      const createdUser = await userService.createUser({
+        username: normalizedUsername,
+        email: normalizedEmail,
         password: values.password,
       });
-      navigate('/login', {
-        state: { signupSuccessMessage: 'Tạo tài khoản thành công. Hãy đăng nhập để tiếp tục.' },
-      });
+
+      useUIStore
+        .getState()
+        .showToast('success', 'Đăng ký tài khoản thành công!');
+      onSignupSuccess?.(normalizedEmail, normalizedUsername, createdUser);
     } catch (error) {
-      setServerError(normalizeApiError(error).message);
+      const normalized = normalizeApiError(error);
+
+      if (normalized.code === ApiErrorCode.USERNAME_INVALID) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          username: 'Tên đăng nhập phải có ít nhất 3 ký tự.',
+        }));
+        usernameInputRef.current?.focus();
+      } else if (normalized.code === ApiErrorCode.EMAIL_INVALID) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          email: 'Email không đúng định dạng.',
+        }));
+        emailInputRef.current?.focus();
+      } else if (normalized.code === ApiErrorCode.PASSWORD_INVALID) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          password: 'Mật khẩu phải có ít nhất 6 ký tự.',
+        }));
+        passwordInputRef.current?.focus();
+      }
+
+      setServerError(resolveSignupServerError(normalized.code, normalized.message));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-      {serverError && (
-        <Alert variant="danger" role="alert">
-          {serverError}
-        </Alert>
-      )}
-      <Input
-        ref={usernameRef}
-        autoComplete="username"
-        label="Tên đăng nhập"
-        name="username"
-        required
-        value={values.username}
-        error={fieldErrors.username}
-        onChange={(event) => updateField('username', event.currentTarget.value)}
-        onBlur={(event) => handleBlur('username', event)}
-        disabled={loading}
-      />
-      <Input
-        ref={emailRef}
-        autoComplete="email"
-        label="Email"
-        name="email"
-        type="email"
-        required
-        value={values.email}
-        error={fieldErrors.email}
-        onChange={(event) => updateField('email', event.currentTarget.value)}
-        onBlur={(event) => handleBlur('email', event)}
-        disabled={loading}
-      />
-      <PasswordInput
-        ref={passwordRef}
-        autoComplete="new-password"
-        label="Mật khẩu"
-        name="password"
-        required
-        value={values.password}
-        error={fieldErrors.password}
-        showStrengthMeter
-        onChange={(event) => updateField('password', event.currentTarget.value)}
-        onBlur={(event) => handleBlur('password', event)}
-        disabled={loading}
-      />
-      <Button type="submit" fullWidth loading={loading} loadingText="Đang tạo tài khoản...">
-        Tạo tài khoản
-      </Button>
-      <p className="text-center text-body-sm text-muted-foreground">
-        Đã có tài khoản?{' '}
-        <Link className="focus-ring rounded-control font-semibold text-primary-strong" to="/login">
-          Đăng nhập
-        </Link>
-      </p>
+    <form className={cn('w-full', className)} onSubmit={handleSubmit} noValidate>
+      <Stack gap={4}>
+        {serverError && (
+          <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
+            {serverError}
+          </Alert>
+        )}
+
+        <Input
+          ref={usernameInputRef}
+          name="username"
+          label="Tên đăng nhập"
+          placeholder="Tối thiểu 3 ký tự (ví dụ: minhtri)"
+          autoComplete="username"
+          required
+          value={values.username}
+          error={fieldErrors.username}
+          disabled={loading}
+          onChange={(event) => updateField('username', event.currentTarget.value)}
+          onBlur={(event) => handleBlur('username', event)}
+        />
+
+        <Input
+          ref={emailInputRef}
+          name="email"
+          type="email"
+          label="Email"
+          placeholder="ban@example.com"
+          autoComplete="email"
+          required
+          value={values.email}
+          error={fieldErrors.email}
+          disabled={loading}
+          onChange={(event) => updateField('email', event.currentTarget.value)}
+          onBlur={(event) => handleBlur('email', event)}
+        />
+
+        <PasswordInput
+          ref={passwordInputRef}
+          name="password"
+          label="Mật khẩu"
+          placeholder="Tối thiểu 6 ký tự"
+          hint="Kết hợp chữ hoa, chữ thường, số và ký tự đặc biệt để tăng độ bảo mật."
+          autoComplete="new-password"
+          required
+          showStrengthMeter
+          value={values.password}
+          error={fieldErrors.password}
+          disabled={loading}
+          onChange={(event) => updateField('password', event.currentTarget.value)}
+          onBlur={(event) => handleBlur('password', event)}
+        />
+
+        <Button
+          type="submit"
+          size="lg"
+          fullWidth
+          loading={loading}
+          loadingText="Đang tạo tài khoản..."
+        >
+          Đăng ký tài khoản
+        </Button>
+      </Stack>
     </form>
   );
 }
+
+export default SignupForm;
