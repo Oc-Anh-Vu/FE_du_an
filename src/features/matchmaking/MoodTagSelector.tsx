@@ -1,128 +1,57 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, EmptyState, Spinner, Tag } from "../../components/ui";
-import { normalizeApiError } from "../../services/apiClient";
-import { addUserTag, getAllTags, getUserTags } from "../../services/tag.service";
-import { useUserStore } from "../../store/userStore";
-import type { TagResponse, UserTagResponse, UUID } from "../../types";
+import type { TagResponse, UUID } from '../../types';
+import { Tag } from '../../components/ui/form/Tag';
+import { Button } from '../../components/ui/form/Button';
+import { Badge } from '../../components/ui/display/Badge';
+import { Alert } from '../../components/ui/feedback/Alert';
+import { Spinner } from '../../components/ui/feedback/Spinner';
+import { EmptyState } from '../../components/ui/feedback/EmptyState';
+import { Sparkles, Utensils } from 'lucide-react';
 
 export interface MoodTagSelectorProps {
-  onSelectionSaved?: (tags: UserTagResponse[]) => void;
+  tags?: TagResponse[];
+  selectedTagIds?: UUID[];
+  onToggleTag?: (tagId: UUID) => void;
+  onConfirmClick?: () => void | Promise<void>;
+  isLoading?: boolean;
+  isSubmitting?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  maxTags?: number;
 }
 
-export default function MoodTagSelector({ onSelectionSaved }: MoodTagSelectorProps) {
-  const myTags = useUserStore((state) => state.myTags);
-  const setMyTags = useUserStore((state) => state.setMyTags);
-  const upsertMyTag = useUserStore((state) => state.upsertMyTag);
-  const [availableTags, setAvailableTags] = useState<TagResponse[]>([]);
-  const [userTags, setUserTags] = useState<UserTagResponse[]>(myTags);
-  const [selectedTagIds, setSelectedTagIds] = useState<UUID[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loadAttempt, setLoadAttempt] = useState(0);
+export default function MoodTagSelector({
+  tags = [],
+  selectedTagIds = [],
+  onToggleTag,
+  onConfirmClick,
+  isLoading = false,
+  isSubmitting = false,
+  error = null,
+  onRetry,
+  maxTags = 2,
+}: MoodTagSelectorProps) {
+  const selectedCount = selectedTagIds.length;
+  const isMaxReached = selectedCount >= maxTags;
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([getAllTags(), getUserTags()])
-      .then(([tags, currentUserTags]) => {
-        if (!active) return;
-        setAvailableTags(tags);
-        setUserTags(currentUserTags);
-        setSelectedTagIds(
-          currentUserTags.filter((userTag) => userTag.temporary).map((userTag) => userTag.tag.id),
-        );
-        setMyTags(currentUserTags);
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(normalizeApiError(requestError).message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loadAttempt, setMyTags]);
-
-  const userTagsById = useMemo(
-    () => new Map(userTags.map((userTag) => [userTag.tag.id, userTag])),
-    [userTags],
-  );
-  const hasUnsavedSelection = selectedTagIds.some(
-    (tagId) => !userTagsById.get(tagId)?.temporary,
-  );
-
-  const toggleTag = useCallback((tagId: UUID) => {
-    setSelectedTagIds((current) =>
-      current.includes(tagId)
-        ? current.filter((selectedId) => selectedId !== tagId)
-        : [...current, tagId],
-    );
-    setError(null);
-  }, []);
-
-  async function saveSelection() {
-    if (saving || !hasUnsavedSelection) return;
-
-    setSaving(true);
-    setError(null);
-    let updatedUserTags = [...userTags];
-
-    try {
-      for (const tagId of selectedTagIds) {
-        const existing = updatedUserTags.find((userTag) => userTag.tag.id === tagId);
-        if (existing?.temporary) continue;
-        if (existing) {
-          throw new Error(
-            `Tag "${existing.tag.tagName}" đang là sở thích cố định và không thể đổi thành tag tạm thời ở đây.`,
-          );
-        }
-
-        const savedTag = await addUserTag(tagId, true);
-        updatedUserTags = [
-          ...updatedUserTags.filter((userTag) => userTag.tag.id !== tagId),
-          savedTag,
-        ];
-        setUserTags(updatedUserTags);
-        upsertMyTag(savedTag);
-      }
-
-      setMyTags(updatedUserTags);
-      onSelectionSaved?.(updatedUserTags.filter((userTag) => userTag.temporary));
-    } catch (requestError) {
-      setError(normalizeApiError(requestError).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-3 py-8" aria-live="polite">
-        <Spinner />
-        <span className="text-body-sm text-muted-foreground">Đang tải tag tâm trạng...</span>
+      <div className="flex flex-col items-center justify-center gap-3 py-12" aria-live="polite">
+        <Spinner size="lg" label="Đang tải danh sách tag tâm trạng..." />
       </div>
     );
   }
 
-  if (error && availableTags.length === 0) {
+  if (error && tags.length === 0) {
     return (
       <Alert
         variant="danger"
-        title="Không tải được tag tâm trạng"
+        title="Không thể tải danh sách tag"
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setLoading(true);
-              setError(null);
-              setLoadAttempt((attempt) => attempt + 1);
-            }}
-          >
-            Thử lại
-          </Button>
+          onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Thử lại
+            </Button>
+          )
         }
       >
         {error}
@@ -130,84 +59,77 @@ export default function MoodTagSelector({ onSelectionSaved }: MoodTagSelectorPro
     );
   }
 
-  const selectableTags = availableTags.filter(
-    (tag) => userTagsById.get(tag.id)?.temporary !== false,
-  );
-  const fixedPreferenceCount = availableTags.length - selectableTags.length;
-  const savedTemporaryCount = userTags.filter((userTag) => userTag.temporary).length;
-
   return (
-    <Card
-      title="Chọn tag tâm trạng"
-      description="Các tag được lưu dưới dạng tạm thời bằng API tag hiện có. Điều này chưa tham gia hàng đợi ghép hội."
-    >
-      <div className="space-y-5">
-        {error && (
-          <Alert variant="danger" title="Không lưu được toàn bộ lựa chọn">
-            {error} Các tag đã lưu thành công trước đó vẫn được giữ lại.
-          </Alert>
-        )}
-
-        {availableTags.length === 0 ? (
-          <EmptyState
-            size="sm"
-            title="Chưa có tag tâm trạng"
-            description="Hiện hệ thống chưa trả về tag nào để chọn."
-          />
-        ) : (
-          <div className="flex flex-wrap gap-2" aria-label="Danh sách tag tâm trạng">
-            {availableTags.map((tag) => {
-              const existingUserTag = userTagsById.get(tag.id);
-              const isFixedPreference = existingUserTag?.temporary === false;
-              const isAlreadyTemporary = existingUserTag?.temporary === true;
-              const isSelected = selectedTagIds.includes(tag.id);
-              return (
-                <Tag
-                  key={tag.id}
-                  label={tag.tagName}
-                  selected={isSelected}
-                  disabled={saving || isFixedPreference || isAlreadyTemporary}
-                  aria-label={
-                    isFixedPreference
-                      ? `${tag.tagName}, sở thích cố định`
-                      : isAlreadyTemporary
-                        ? `${tag.tagName}, đã lưu dưới dạng tạm thời`
-                      : `${tag.tagName}${isSelected ? ", đã chọn" : ""}`
-                  }
-                  onClick={() => toggleTag(tag.id)}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {fixedPreferenceCount > 0 && (
-          <p className="text-caption text-muted-foreground">
-            {fixedPreferenceCount} tag sở thích cố định không thể đổi sang tạm thời tại đây để tránh
-            thay đổi cài đặt sở thích hiện có.
+    <div className="w-full space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-heading-sm font-bold text-foreground">
+            <Utensils size={20} className="text-primary" />
+            Hôm nay bạn muốn ăn gì?
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            Chọn tối đa {maxTags} hương vị hoặc tâm trạng để hệ thống gợi ý và ghép hội phù hợp.
           </p>
-        )}
-        {savedTemporaryCount > 0 && (
-          <p className="text-caption text-muted-foreground">
-            Các tag tạm thời đã lưu được giữ nguyên; chưa có quy tắc Backend xác nhận để kết thúc
-            hoặc xóa chúng khi hủy ghép.
-          </p>
-        )}
+        </div>
 
-        <p className="text-body-sm text-muted-foreground" aria-live="polite">
-          Đã chọn {selectedTagIds.length} tag tạm thời.
-        </p>
+        <Badge
+          variant={isMaxReached ? 'success' : selectedCount > 0 ? 'info' : 'default'}
+          size="md"
+        >
+          {selectedCount}/{maxTags} đã chọn
+        </Badge>
+      </header>
 
+      {error && (
+        <Alert variant="danger" title="Lỗi">
+          {error}
+        </Alert>
+      )}
+
+      {tags.length === 0 ? (
+        <EmptyState
+          title="Chưa có tag tâm trạng nào"
+          description="Hệ thống đang cập nhật danh mục tag. Vui lòng quay lại sau."
+          size="sm"
+        />
+      ) : (
+        <div
+          className="flex flex-wrap gap-2.5"
+          role="group"
+          aria-label="Danh sách tag tâm trạng ăn uống"
+        >
+          {tags.map((tag) => {
+            const isSelected = selectedTagIds.includes(tag.id);
+
+            return (
+              <Tag
+                key={tag.id}
+                label={tag.tagName}
+                selected={isSelected}
+                onClick={() => onToggleTag?.(tag.id)}
+                aria-pressed={isSelected}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <footer className="pt-2">
         <Button
           fullWidth
-          loading={saving}
-          loadingText="Đang lưu tag..."
-          disabled={!hasUnsavedSelection || selectedTagIds.length === 0}
-          onClick={() => void saveSelection()}
+          size="lg"
+          variant="primary"
+          leftIcon={<Sparkles aria-hidden="true" size={18} />}
+          disabled={selectedCount === 0 || isSubmitting}
+          loading={isSubmitting}
+          loadingText="Đang lưu tâm trạng..."
+          onClick={() => void onConfirmClick?.()}
         >
-          {hasUnsavedSelection ? "Lưu tag tâm trạng" : "Tag tâm trạng đã được lưu"}
+          {selectedCount === 0
+            ? 'Vui lòng chọn ít nhất 1 tag'
+            : 'Xác nhận tâm trạng & Tìm hội quẹt thẻ'}
         </Button>
-      </div>
-    </Card>
+      </footer>
+    </div>
   );
 }
