@@ -9,13 +9,18 @@ export default function Login() {
   const location = useLocation();
 
   const handleLoginSuccess = (user: UserResponse) => {
-    const fromPath = (location.state as { from?: { pathname: string } })?.from?.pathname;
     const userRoles = user.roles || [];
     const isAdmin = userRoles.includes('ADMIN') || userRoles.includes('ROLE_ADMIN');
 
-    // Chuyển hướng theo trang trước đó hoặc mặc định theo phân quyền
-    const destination = fromPath || (isAdmin ? '/admin' : '/app');
-    navigate(destination, { replace: true });
+    if (isAdmin) {
+      // Tài khoản Admin luôn vào thẳng trang quản trị /admin
+      navigate('/admin', { replace: true });
+    } else {
+      // Tài khoản ROLE_USER vào /app (hoặc trang trước đó nếu trang đó thuộc /app)
+      const fromPath = (location.state as { from?: { pathname: string } })?.from?.pathname;
+      const destination = fromPath && fromPath.startsWith('/app') ? fromPath : '/app';
+      navigate(destination, { replace: true });
+    }
   };
 
   return (
