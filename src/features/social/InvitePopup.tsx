@@ -1,204 +1,148 @@
-import { useEffect, useRef, useState } from "react";
-import type { Client } from "@stomp/stompjs";
-import { Button } from "../../components/ui/form/Button";
-import { Modal } from "../../components/ui/feedback/Modal";
+import { useState } from 'react';
+import type { Client } from '@stomp/stompjs';
+import { DoorOpen, Users } from 'lucide-react';
+import { Button } from '../../components/ui/form/Button';
+import { Modal } from '../../components/ui/feedback/Modal';
+import { Avatar } from '../../components/ui/display/Avatar';
+import { Badge } from '../../components/ui/display/Badge';
+import { useUIStore } from '../../store/uiStore';
 
-type RoomInvitation = {
-  invitationId: string;
-  roomId: string;
-  inviterName: string;
-  roomName: string;
-};
-
-type InviteDecision = "ACCEPT" | "DECLINE";
-
-type PendingAction = {
-  invitationId: string;
-  decision: InviteDecision;
-};
-
-type InvitePopupProps = {
+export interface InvitePopupProps {
+  onAcceptInvite?: (roomId: string, roomCode: string) => void | Promise<void>;
+  onDeclineInvite?: () => void | Promise<void>;
   socketClient?: Client;
   socketConnected?: boolean;
   invitationTopic?: string;
-  subscribeInvitations?: (
-    onMessage: (payload: string) => void,
-  ) => () => void;
-  respondToInvitation: (
-    invitationId: string,
-    decision: InviteDecision,
-  ) => Promise<void>;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function parseInvitation(payload: string): RoomInvitation | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(payload);
-  } catch (error) {
-    console.error("Không thể đọc lời mời vào phòng từ WebSocket.", error);
-    return null;
-  }
-
-  if (
-    !isRecord(parsed) ||
-    typeof parsed.invitationId !== "string" ||
-    !parsed.invitationId ||
-    typeof parsed.roomId !== "string" ||
-    !parsed.roomId ||
-    typeof parsed.inviterName !== "string" ||
-    !parsed.inviterName
-  ) {
-    return null;
-  }
-
-  return {
-    invitationId: parsed.invitationId,
-    roomId: parsed.roomId,
-    inviterName: parsed.inviterName,
-    roomName:
-      typeof parsed.roomName === "string" && parsed.roomName
-        ? parsed.roomName
-        : "phòng ăn",
-  };
+  subscribeInvitations?: (onMessage: (payload: string) => void) => () => void;
+  respondToInvitation?: (invitationId: string, decision: 'ACCEPT' | 'DECLINE') => Promise<void>;
 }
 
 export default function InvitePopup({
-  socketClient,
-  socketConnected = false,
-  invitationTopic,
-  subscribeInvitations,
-  respondToInvitation,
+  onAcceptInvite,
+  onDeclineInvite,
 }: InvitePopupProps) {
-  const [invitations, setInvitations] = useState<RoomInvitation[]>([]);
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(
-    null,
-  );
+  const inviteModal = useUIStore((state) => state.inviteModal);
+  const closeInviteModal = useUIStore((state) => state.closeInviteModal);
+
+  const [isJoining, setIsJoining] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const responseInProgress = useRef(false);
-  const invitation = invitations[0] ?? null;
 
-  useEffect(() => {
-    const handleInvitation = (payload: string) => {
-      const nextInvitation = parseInvitation(payload);
-      if (!nextInvitation) return;
+  if (!inviteModal.isOpen || !inviteModal.payload) {
+    return null;
+  }
 
-      setInvitations((currentInvitations) => {
-        if (
-          currentInvitations.some(
-            (current) => current.invitationId === nextInvitation.invitationId,
-          )
-        ) {
-          return currentInvitations;
-        }
-        return [...currentInvitations, nextInvitation];
-      });
-    };
+  const { roomId = '', roomCode, roomName, inviterName, inviterAvatarUrl } = inviteModal.payload;
 
-    if (
-      invitationTopic &&
-      socketConnected &&
-      socketClient?.connected
-    ) {
-      const subscription = socketClient.subscribe(
-        invitationTopic,
-        (message) => handleInvitation(message.body),
-      );
-
-      return () => subscription.unsubscribe();
-    }
-
-    return subscribeInvitations?.(handleInvitation);
-  }, [
-    invitationTopic,
-    socketClient,
-    socketConnected,
-    subscribeInvitations,
-  ]);
-
-  async function handleResponse(decision: InviteDecision) {
-    if (!invitation || responseInProgress.current) return;
-
-    const invitationId = invitation.invitationId;
-    responseInProgress.current = true;
-    setPendingAction({ invitationId, decision });
+  async function handleAccept() {
+    setIsJoining(true);
     setError(null);
-
     try {
-      await respondToInvitation(invitationId, decision);
-      setInvitations((current) =>
-        current.filter((item) => item.invitationId !== invitationId),
-      );
-      setError(null);
-    } catch (responseError) {
-      setError(
-        responseError instanceof Error
-          ? responseError.message
-          : "Không thể gửi phản hồi. Vui lòng thử lại.",
-      );
+      if (onAcceptInvite) {
+        await onAcceptInvite(roomId, roomCode);
+      }
+      closeInviteModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể tham gia phòng ăn lúc này.');
     } finally {
-      responseInProgress.current = false;
-      setPendingAction((current) =>
-        current?.invitationId === invitationId ? null : current,
-      );
+      setIsJoining(false);
     }
   }
 
-  function closeInvitation() {
-    if (responseInProgress.current) return;
-    setInvitations((current) => current.slice(1));
+  async function handleDecline() {
+    setIsDeclining(true);
     setError(null);
+    try {
+      if (onDeclineInvite) {
+        await onDeclineInvite();
+      }
+      closeInviteModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể từ chối lời mời.');
+    } finally {
+      setIsDeclining(false);
+    }
   }
-
-  if (!invitation) return null;
-
-  const isPending = pendingAction?.invitationId === invitation.invitationId;
 
   return (
     <Modal
-      isOpen
-      onClose={closeInvitation}
-      title="Lời mời vào phòng"
+      isOpen={inviteModal.isOpen}
+      onClose={() => {
+        if (!isJoining && !isDeclining) {
+          closeInviteModal();
+        }
+      }}
+      title="Lời mời tham gia phòng ăn"
       size="sm"
-      closeOnOverlayClick={!isPending}
-      closeOnEsc={!isPending}
+      closeOnOverlayClick={!isJoining && !isDeclining}
+      closeOnEsc={!isJoining && !isDeclining}
       footer={
         <div className="flex justify-end gap-3">
           <Button
             variant="outline"
-            disabled={isPending}
-            loading={pendingAction?.decision === "DECLINE" && isPending}
+            disabled={isJoining || isDeclining}
+            loading={isDeclining}
             loadingText="Đang từ chối..."
-            onClick={() => void handleResponse("DECLINE")}
+            onClick={() => void handleDecline()}
           >
             Từ chối
           </Button>
           <Button
-            disabled={isPending}
-            loading={pendingAction?.decision === "ACCEPT" && isPending}
-            loadingText="Đang tham gia..."
-            onClick={() => void handleResponse("ACCEPT")}
+            variant="primary"
+            leftIcon={<DoorOpen aria-hidden="true" size={16} />}
+            disabled={isJoining || isDeclining}
+            loading={isJoining}
+            loadingText="Đang vào phòng..."
+            onClick={() => void handleAccept()}
           >
-            Tham gia
+            Vào phòng ngay
           </Button>
         </div>
       }
     >
-      <p className="text-body text-muted-foreground">
-        <span className="font-semibold text-foreground">
-          {invitation.inviterName}
-        </span>{" "}
-        mời bạn tham gia {invitation.roomName}.
-      </p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Badge variant="info" size="sm">
+            [PENDING_BACKEND]
+          </Badge>
+          <span className="text-caption text-muted-foreground">Tính năng sắp ra mắt</span>
+        </div>
 
-      {error && (
-        <p role="alert" className="mt-3 text-body-sm text-danger">
-          {error}
-        </p>
-      )}
+        <div className="flex items-center gap-3 rounded-card border border-border bg-muted/40 p-3">
+          <Avatar
+            src={inviterAvatarUrl ?? undefined}
+            name={inviterName}
+            size="lg"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-body font-bold text-foreground">
+              {inviterName}
+            </p>
+            <p className="text-body-sm text-muted-foreground">
+              vừa gửi lời mời bạn cùng quẹt thẻ chọn món!
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-card border border-border bg-card p-3 space-y-2">
+          <div className="flex items-center gap-2 text-body-sm font-semibold text-foreground">
+            <Users size={16} className="text-primary" />
+            <span>Phòng: {roomName || 'Hội Ăn Uống'}</span>
+          </div>
+          <div className="flex items-center justify-between text-body-sm">
+            <span className="text-muted-foreground">Mã phòng:</span>
+            <span className="font-mono font-bold tracking-wider text-primary-strong">
+              {roomCode}
+            </span>
+          </div>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-body-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
     </Modal>
   );
 }

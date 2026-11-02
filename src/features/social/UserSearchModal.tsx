@@ -1,28 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import { UserPlus } from "lucide-react";
-import type { UserResponse } from "../../types/api";
-import { Avatar } from "../../components/ui/display/Avatar";
-import { Button } from "../../components/ui/form/Button";
-import { Modal } from "../../components/ui/feedback/Modal";
-import { SearchInput } from "../../components/ui/form/SearchInput";
-import { Spinner } from "../../components/ui/feedback/Spinner";
+import { useEffect, useRef, useState } from 'react';
+import { UserPlus } from 'lucide-react';
+import type { UserResponse, UUID } from '../../types';
+import { Avatar } from '../../components/ui/display/Avatar';
+import { Button } from '../../components/ui/form/Button';
+import { Modal } from '../../components/ui/feedback/Modal';
+import { SearchInput } from '../../components/ui/form/SearchInput';
+import { Spinner } from '../../components/ui/feedback/Spinner';
+import { Alert } from '../../components/ui/feedback/Alert';
+
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface UserSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   searchUsers: (query: string) => Promise<UserResponse[]>;
-  onSendRequest: (userId: string) => Promise<void>;
-  currentUserId?: string;
+  onSendRequest: (userId: UUID) => Promise<boolean | void>;
+  currentUserId?: UUID;
+  isSearchForbidden?: boolean;
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Đã xảy ra lỗi. Vui lòng thử lại.";
+  return error instanceof Error ? error.message : 'Đã xảy ra lỗi khi tìm kiếm hoặc gửi yêu cầu.';
 }
 
 function isAdmin(user: UserResponse): boolean {
-  return user.roles.some((role) => role === "ROLE_ADMIN" || role === "ADMIN");
+  return (user.roles ?? []).some((role) => role === 'ROLE_ADMIN' || role === 'ADMIN');
 }
 
 export default function UserSearchModal({
@@ -31,8 +33,9 @@ export default function UserSearchModal({
   searchUsers,
   onSendRequest,
   currentUserId,
+  isSearchForbidden = false,
 }: UserSearchModalProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -44,13 +47,15 @@ export default function UserSearchModal({
   const requestInProgress = useRef(false);
 
   useEffect(() => {
-    if (!isOpen) searchSequence.current += 1;
+    if (!isOpen) {
+      searchSequence.current += 1;
+    }
   }, [isOpen]);
 
   function handleClose() {
     if (requestInProgress.current) return;
     searchSequence.current += 1;
-    setQuery("");
+    setQuery('');
     setUsers([]);
     setHasSearched(false);
     setIsSearching(false);
@@ -65,7 +70,7 @@ export default function UserSearchModal({
     event.preventDefault();
     const searchTerm = query.trim();
     if (!searchTerm) {
-      setSearchError("Nhập tên người dùng hoặc UUID để tìm kiếm.");
+      setSearchError('Vui lòng nhập tên người dùng hoặc mã UUID để tìm kiếm.');
       return;
     }
 
@@ -86,7 +91,9 @@ export default function UserSearchModal({
         setSearchError(getErrorMessage(error));
       }
     } finally {
-      if (sequence === searchSequence.current) setIsSearching(false);
+      if (sequence === searchSequence.current) {
+        setIsSearching(false);
+      }
     }
   }
 
@@ -97,8 +104,10 @@ export default function UserSearchModal({
     setSendingUserId(userId);
     setRequestError(null);
     try {
-      await onSendRequest(userId);
-      setSentUserIds((currentIds) => new Set(currentIds).add(userId));
+      const res = await onSendRequest(userId);
+      if (res !== false) {
+        setSentUserIds((currentIds) => new Set(currentIds).add(userId));
+      }
     } catch (error) {
       setRequestError(getErrorMessage(error));
     } finally {
@@ -107,62 +116,93 @@ export default function UserSearchModal({
     }
   }
 
+  const isQueryUuid = UUID_REGEX.test(query.trim());
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Tìm bạn mới"
-      description="Tìm theo tên người dùng hoặc nhập UUID nếu không tìm thấy."
+      title="Tìm kiếm & Kết bạn"
+      description="Tìm bạn bằng tên tài khoản hoặc dán trực tiếp mã định danh UUID."
       size="md"
     >
-      <form className="space-y-3" onSubmit={(event) => void handleSearch(event)}>
+      <form className="space-y-4" onSubmit={(event) => void handleSearch(event)}>
         <SearchInput
-          label="Tên người dùng hoặc UUID"
-          placeholder="Ví dụ: nguyenvana"
+          label="Tên tài khoản hoặc mã UUID"
+          placeholder="Nhập username hoặc UUID (ví dụ: a1b2c3d4-...)"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (searchError) setSearchError(null);
+          }}
           onClear={() => {
-            setQuery("");
+            setQuery('');
             setUsers([]);
             setHasSearched(false);
             setSearchError(null);
           }}
           autoComplete="off"
         />
+
         <Button
           type="submit"
           fullWidth
           loading={isSearching}
-          loadingText="Đang tìm..."
+          loadingText="Đang tìm kiếm..."
         >
           Tìm kiếm
         </Button>
       </form>
 
-      {searchError && (
-        <p role="alert" className="mt-4 text-body-sm text-danger">
-          {searchError}
-        </p>
+      {isSearchForbidden && (
+        <div className="mt-4">
+          <Alert variant="warning" title="Bảo mật danh bạ người dùng">
+            Hệ thống áp dụng chính sách bảo mật không công khai danh bạ chung. Bạn có thể dán trực tiếp mã <strong>UUID (36 ký tự)</strong> của bạn bè vào ô trên để gửi lời mời kết bạn ngay.
+          </Alert>
+        </div>
       )}
+
+      {searchError && (
+        <div className="mt-4">
+          <Alert variant="danger">
+            {searchError}
+          </Alert>
+        </div>
+      )}
+
       {requestError && (
-        <p role="alert" className="mt-4 text-body-sm text-danger">
-          {requestError}
-        </p>
+        <div className="mt-4">
+          <Alert variant="danger">
+            {requestError}
+          </Alert>
+        </div>
       )}
 
       <div className="mt-4" aria-live="polite">
         {isSearching ? (
           <div className="flex justify-center py-6">
-            <Spinner label="Đang tìm người dùng" />
+            <Spinner label="Đang tra cứu người dùng..." />
           </div>
         ) : hasSearched && users.length === 0 && !searchError ? (
-          <p className="py-6 text-center text-body-sm text-muted-foreground">
-            Không tìm thấy người dùng phù hợp.
-          </p>
+          <div className="py-6 text-center">
+            <p className="text-body-sm text-muted-foreground">
+              Không tìm thấy người dùng phù hợp với từ khóa.
+            </p>
+            {isQueryUuid && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void handleSendRequest(query.trim())}
+              >
+                Gửi kết bạn trực tiếp tới UUID này
+              </Button>
+            )}
+          </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border rounded-card border border-border bg-card p-2" role="list">
             {users.map((user) => {
-              const isSelf = user.id === currentUserId;
+              const isSelf = Boolean(currentUserId && user.id === currentUserId);
               const isAdminAccount = isAdmin(user);
               const isSent = sentUserIds.has(user.id);
               const isSending = sendingUserId === user.id;
@@ -170,38 +210,41 @@ export default function UserSearchModal({
               return (
                 <li
                   key={user.id}
-                  className="flex items-center gap-3 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 p-3 transition-colors hover:bg-muted/50 rounded-card"
                 >
-                  <Avatar
-                    src={user.avatarUrl ?? undefined}
-                    name={user.username}
-                    size="md"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-body font-semibold text-foreground">
-                      {user.username}
-                    </p>
-                    <p className="truncate text-caption text-muted-foreground">
-                      {user.id}
-                    </p>
-                    {(isSelf || isAdminAccount) && (
-                      <p className="text-caption text-muted-foreground">
-                        {isSelf ? "Đây là tài khoản của bạn" : "Không thể kết bạn với tài khoản này"}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar
+                      src={user.avatarUrl ?? undefined}
+                      name={user.username}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-body font-bold text-foreground">
+                        {user.username}
                       </p>
-                    )}
+                      <p className="truncate text-caption text-muted-foreground font-mono">
+                        {user.id}
+                      </p>
+                      {(isSelf || isAdminAccount) && (
+                        <p className="text-caption font-semibold text-warning-soft-foreground">
+                          {isSelf
+                            ? 'Đây là tài khoản của bạn'
+                            : 'Không thể gửi kết bạn cho Quản trị viên'}
+                        </p>
+                      )}
+                    </div>
                   </div>
+
                   <Button
                     size="sm"
-                    variant={isSent ? "outline" : "primary"}
-                    leftIcon={
-                      !isSent ? <UserPlus aria-hidden="true" size={16} /> : undefined
-                    }
+                    variant={isSent ? 'outline' : 'primary'}
+                    leftIcon={!isSent ? <UserPlus aria-hidden="true" size={16} /> : undefined}
                     disabled={isSelf || isAdminAccount || isSent || sendingUserId !== null}
                     loading={isSending}
                     loadingText="Đang gửi..."
                     onClick={() => void handleSendRequest(user.id)}
                   >
-                    {isSent ? "Đã gửi" : "Kết bạn"}
+                    {isSent ? 'Đã gửi' : 'Kết bạn'}
                   </Button>
                 </li>
               );

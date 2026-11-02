@@ -1,33 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Client } from "@stomp/stompjs";
-import { UserRoundX } from "lucide-react";
-import { Avatar } from "../../components/ui/display/Avatar";
-import { Button } from "../../components/ui/form/Button";
-import { EmptyState } from "../../components/ui/feedback/EmptyState";
-import { Modal } from "../../components/ui/feedback/Modal";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Client } from '@stomp/stompjs';
+import { UserRoundX } from 'lucide-react';
+import type { UserResponse } from '../../types';
+import { Button } from '../../components/ui/form/Button';
+import { EmptyState } from '../../components/ui/feedback/EmptyState';
+import { Modal } from '../../components/ui/feedback/Modal';
+import { ListItem } from '../../components/ui/display/ListItem';
+import { Badge } from '../../components/ui/display/Badge';
 
-export interface Friend {
-  id: string;
-  username: string;
-  avatarUrl?: string | null;
-}
-
-type PresenceEvent = {
-  userId: string;
-  status: "ONLINE" | "OFFLINE";
-};
-
-type FriendListProps = {
-  friends: Friend[];
-  onRemoveFriend?: (friendId: string) => Promise<void>;
+export interface FriendListProps {
+  friends: UserResponse[];
+  onRemoveFriend?: (friendId: string) => Promise<boolean | void>;
   socketClient?: Client;
   socketConnected?: boolean;
   presenceTopic?: string;
   subscribePresence?: (onMessage: (payload: string) => void) => () => void;
+}
+
+type PresenceEvent = {
+  userId: string;
+  status: 'ONLINE' | 'OFFLINE';
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function parsePresenceEvent(payload: string): PresenceEvent | null {
@@ -35,15 +31,15 @@ function parsePresenceEvent(payload: string): PresenceEvent | null {
   try {
     parsed = JSON.parse(payload);
   } catch (error) {
-    console.error("Không thể đọc cập nhật trạng thái bạn bè từ WebSocket.", error);
+    console.error('Không thể đọc cập nhật trạng thái bạn bè từ WebSocket.', error);
     return null;
   }
 
   if (
     !isRecord(parsed) ||
-    typeof parsed.userId !== "string" ||
+    typeof parsed.userId !== 'string' ||
     !parsed.userId ||
-    (parsed.status !== "ONLINE" && parsed.status !== "OFFLINE")
+    (parsed.status !== 'ONLINE' && parsed.status !== 'OFFLINE')
   ) {
     return null;
   }
@@ -52,9 +48,7 @@ function parsePresenceEvent(payload: string): PresenceEvent | null {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Không thể hủy kết bạn. Vui lòng thử lại.";
+  return error instanceof Error ? error.message : 'Không thể hủy kết bạn. Vui lòng thử lại.';
 }
 
 export default function FriendList({
@@ -65,10 +59,8 @@ export default function FriendList({
   presenceTopic,
   subscribePresence,
 }: FriendListProps) {
-  const [onlineFriendIds, setOnlineFriendIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [friendToRemove, setFriendToRemove] = useState<Friend | null>(null);
+  const [onlineFriendIds, setOnlineFriendIds] = useState<Set<string>>(() => new Set());
+  const [friendToRemove, setFriendToRemove] = useState<UserResponse | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const removeInProgress = useRef(false);
@@ -80,7 +72,7 @@ export default function FriendList({
 
       setOnlineFriendIds((currentIds) => {
         const nextIds = new Set(currentIds);
-        if (event.status === "ONLINE") nextIds.add(event.userId);
+        if (event.status === 'ONLINE') nextIds.add(event.userId);
         else nextIds.delete(event.userId);
         return nextIds;
       });
@@ -94,25 +86,18 @@ export default function FriendList({
     }
 
     return subscribePresence?.(handlePresence);
-  }, [
-    presenceTopic,
-    socketClient,
-    socketConnected,
-    subscribePresence,
-  ]);
+  }, [presenceTopic, socketClient, socketConnected, subscribePresence]);
 
   const sortedFriends = useMemo(
     () =>
       [...friends].sort(
         (first, second) =>
-          Number(onlineFriendIds.has(second.id)) -
-          Number(onlineFriendIds.has(first.id)),
+          Number(onlineFriendIds.has(second.id)) - Number(onlineFriendIds.has(first.id)),
       ),
     [friends, onlineFriendIds],
   );
-  const onlineCount = friends.filter((friend) =>
-    onlineFriendIds.has(friend.id),
-  ).length;
+
+  const onlineCount = friends.filter((friend) => onlineFriendIds.has(friend.id)).length;
 
   async function confirmRemoveFriend() {
     if (!friendToRemove || !onRemoveFriend || removeInProgress.current) return;
@@ -140,56 +125,61 @@ export default function FriendList({
   return (
     <>
       <section className="w-full" aria-label="Danh sách bạn bè">
-        <header className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-heading-sm font-bold text-foreground">Bạn bè</h2>
+        <header className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-heading-sm font-bold text-foreground">Bạn bè</h2>
+            <Badge variant="default" size="sm">
+              {friends.length}
+            </Badge>
+          </div>
           <span className="text-body-sm text-muted-foreground" aria-live="polite">
-            {onlineCount} đang online
+            {onlineCount > 0 ? (
+              <Badge variant="success" size="sm" dot>
+                {onlineCount} đang online
+              </Badge>
+            ) : (
+              'Chưa có bạn bè online'
+            )}
           </span>
         </header>
 
         {sortedFriends.length === 0 ? (
           <EmptyState
             title="Chưa có bạn bè"
-            description="Kết bạn để cùng nhau tìm quán ăn nhé."
+            description="Kết bạn để cùng nhau tìm quán ăn và tạo phòng quẹt thẻ nhé!"
             size="sm"
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border rounded-card border border-border bg-card p-2 shadow-card" role="list">
             {sortedFriends.map((friend) => {
               const isOnline = onlineFriendIds.has(friend.id);
 
               return (
-                <li
+                <ListItem
                   key={friend.id}
-                  className="flex items-center gap-3 py-3"
-                  aria-label={`${friend.username}, ${
-                    isOnline ? "đang online" : "offline"
-                  }`}
-                >
-                  <Avatar
-                    src={friend.avatarUrl ?? undefined}
-                    name={friend.username}
-                    size="md"
-                    isOnline={isOnline}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-body font-semibold text-foreground">
-                    {friend.username}
-                  </span>
-                  {onRemoveFriend && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<UserRoundX aria-hidden="true" size={16} />}
-                      aria-label={`Hủy kết bạn với ${friend.username}`}
-                      onClick={() => {
-                        setRemoveError(null);
-                        setFriendToRemove(friend);
-                      }}
-                    >
-                      Hủy kết bạn
-                    </Button>
-                  )}
-                </li>
+                  as="li"
+                  title={friend.username}
+                  subtitle={friend.email || undefined}
+                  avatarUrl={friend.avatarUrl ?? undefined}
+                  isOnline={isOnline}
+                  className="px-3 hover:bg-muted/50 transition-colors"
+                  action={
+                    onRemoveFriend && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<UserRoundX aria-hidden="true" size={16} />}
+                        aria-label={`Hủy kết bạn với ${friend.username}`}
+                        onClick={() => {
+                          setRemoveError(null);
+                          setFriendToRemove(friend);
+                        }}
+                      >
+                        Hủy kết bạn
+                      </Button>
+                    )
+                  }
+                />
               );
             })}
           </ul>
@@ -199,10 +189,10 @@ export default function FriendList({
       <Modal
         isOpen={friendToRemove !== null}
         onClose={closeRemoveDialog}
-        title="Hủy kết bạn"
+        title="Xác nhận hủy kết bạn"
         description={
           friendToRemove
-            ? `Bạn có chắc muốn hủy kết bạn với ${friendToRemove.username}?`
+            ? `Bạn có chắc muốn hủy kết bạn với ${friendToRemove.username}? Hai bạn sẽ không thể cùng quẹt thẻ nhóm nếu chưa kết bạn lại.`
             : undefined
         }
         size="sm"
@@ -210,11 +200,7 @@ export default function FriendList({
         closeOnEsc={!isRemoving}
         footer={
           <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              disabled={isRemoving}
-              onClick={closeRemoveDialog}
-            >
+            <Button variant="outline" disabled={isRemoving} onClick={closeRemoveDialog}>
               Giữ lại
             </Button>
             <Button
@@ -229,7 +215,7 @@ export default function FriendList({
         }
       >
         {removeError && (
-          <p role="alert" className="text-body-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger mt-2">
             {removeError}
           </p>
         )}
