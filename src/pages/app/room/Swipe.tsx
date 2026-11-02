@@ -1,11 +1,12 @@
 // Màn hình Quẹt thẻ nhóm theo lượt vuốt cử chỉ & Debounce
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BarChart3, RefreshCw } from 'lucide-react';
-import type { PlaceResponse } from '../../../types';
+import { ArrowLeft, BarChart3, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import type { PlaceResponse, RoomSocketEvent } from '../../../types';
 import { useSwipeActions } from '../../../features/swipe/useSwipeActions';
 import { useRoomActions } from '../../../features/room/useRoomActions';
 import { useUIStore } from '../../../store/uiStore';
+import { useSocket } from '../../../hooks/useSocket';
 import GroupSwipeDeck from '../../../features/swipe/GroupSwipeDeck';
 
 import { PageContainer } from '../../../components/layout/PageContainer';
@@ -26,15 +27,18 @@ export default function Swipe() {
     remainingDeck,
     progressPercentage,
     currentRoom,
+    lastSwipeReaction,
     isInitializing,
     isSwiping,
     error,
     initializeSwipeSession,
     submitSwipeDecision,
+    handleSwipeSocketEvent,
   } = useSwipeActions();
 
   const { fetchRoomDetails } = useRoomActions();
   const hasRedirectedRef = useRef(false);
+  const [showHearts, setShowHearts] = useState(false);
 
   // Khởi tạo phiên quẹt thẻ khi mount
   useEffect(() => {
@@ -43,28 +47,55 @@ export default function Swipe() {
     void initializeSwipeSession(roomId);
   }, [roomId, initializeSwipeSession]);
 
-  // Polling đồng bộ trạng thái phòng mỗi 4000ms: nếu Host đóng phòng hoặc tự động match -> chuyển sang Summary
-  useEffect(() => {
+  // Hàm kiểm tra trạng thái phòng qua REST làm fallback
+  const syncRoomFallback = useCallback(async () => {
     if (!roomId) return;
-
-    const interval = setInterval(async () => {
-      const result = await fetchRoomDetails(roomId);
-      if (result.success && result.room && !hasRedirectedRef.current) {
-        if (result.room.status === 'CLOSED') {
-          hasRedirectedRef.current = true;
-          showToast('success', 'Phòng đã chốt được quán ăn!');
-          navigate(`/app/room/${roomId}/summary`, { replace: true });
-        } else if (result.room.status === 'OPEN') {
-          hasRedirectedRef.current = true;
-          navigate(`/app/room/${roomId}/lobby`, { replace: true });
-        }
+    const result = await fetchRoomDetails(roomId);
+    if (result.success && result.room && !hasRedirectedRef.current) {
+      if (result.room.status === 'CLOSED') {
+        hasRedirectedRef.current = true;
+        showToast('success', 'Phòng đã chốt được quán ăn!');
+        navigate(`/app/room/${roomId}/summary`, { replace: true });
+      } else if (result.room.status === 'OPEN') {
+        hasRedirectedRef.current = true;
+        navigate(`/app/room/${roomId}/lobby`, { replace: true });
       }
-    }, 4000);
-
-    return () => {
-      clearInterval(interval);
-    };
+    }
   }, [roomId, fetchRoomDetails, navigate, showToast]);
+
+  // Tiếp nhận thông báo WebSocket từ /topic/rooms/{roomId}
+  const handleSocketMessage = useCallback(
+    (event: RoomSocketEvent) => {
+      if (!event || !event.type) return;
+
+      // Chuyển cho Feature Hook xử lý state
+      handleSwipeSocketEvent(event);
+
+      if (event.type === 'SWIPE_ACTION') {
+        setShowHearts(true);
+        setTimeout(() => setShowHearts(false), 2000);
+      } else if (event.type === 'MATCH_FOUND' && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        showToast('success', 'Tuyệt vời! Cả phòng đã khớp chung một quán ăn!');
+        setTimeout(() => {
+          navigate(`/app/room/${roomId}/summary`, { replace: true });
+        }, 1500);
+      } else if (event.type === 'ROOM_CLOSED' && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        showToast('info', 'Phòng ăn đã kết thúc phiên quẹt.');
+        navigate(`/app/room/${roomId}/summary`, { replace: true });
+      }
+    },
+    [handleSwipeSocketEvent, roomId, navigate, showToast],
+  );
+
+  // Kích hoạt Hybrid Socket Client cho Bàn quẹt thẻ
+  const { isConnected } = useSocket<RoomSocketEvent>({
+    roomId,
+    onMessage: handleSocketMessage,
+    onPoll: syncRoomFallback,
+    pollIntervalMs: 4000,
+  });
 
   // Xử lý quẹt thẻ
   const handleSwipe = useCallback(
@@ -79,15 +110,31 @@ export default function Swipe() {
 
   return (
     <PageContainer maxWidth="md" className="py-6 space-y-6">
-      {/* Hiệu ứng pháo hoa và tim bay khi phòng chốt quán thành công */}
+      {/* Hiệu ứng pháo hoa khi phòng chốt quán thành công */}
       <Confetti active={Boolean(matchedPlace)} count={60} />
-      <FloatingHearts active={Boolean(matchedPlace)} count={20} />
+      {/* Hiệu ứng tim bay realtime khi có thành viên vừa quẹt thích */}
+      <FloatingHearts active={Boolean(matchedPlace) || showHearts} count={showHearts ? 15 : 20} />
 
       <PageHeader
         title={currentRoom?.name ? `Quẹt thẻ: ${currentRoom.name}` : 'Quẹt Thẻ Nhóm'}
-        subtitle="Vuốt phải hoặc nhấn ❤️ nếu thích, vuốt trái hoặc nhấn ✕ để bỏ qua."
+        subtitle={
+          lastSwipeReaction
+            ? `${lastSwipeReaction.username} vừa ${lastSwipeReaction.direction === 'RIGHT' ? '❤️ thích' : '✕ bỏ qua'} một quán!`
+            : 'Vuốt phải hoặc nhấn ❤️ nếu thích, vuốt trái hoặc nhấn ✕ để bỏ qua.'
+        }
         action={
           <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold ${
+                isConnected
+                  ? 'bg-success-soft text-success-soft-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+              title={isConnected ? 'Đang kết nối thời gian thực' : 'Đang đồng bộ định kỳ'}
+            >
+              {isConnected ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+              {isConnected ? 'Realtime' : 'Đồng bộ'}
+            </span>
             <Button
               variant="outline"
               size="sm"
