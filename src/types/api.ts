@@ -1,5 +1,4 @@
 // --- 0. Kiểu cơ sở, Enums & Wrapper phản hồi ---
-
 export type UUID = string;
 export type ISODateTimeString = string;
 export type PriceRange = 1 | 2 | 3;
@@ -55,6 +54,20 @@ export const RoomStatus = {
 } as const;
 export type RoomStatus = (typeof RoomStatus)[keyof typeof RoomStatus];
 
+export const RoomType = {
+  PRIVATE: 'PRIVATE',
+  PUBLIC: 'PUBLIC',
+} as const;
+export type RoomType = (typeof RoomType)[keyof typeof RoomType];
+
+export const MatchStatus = {
+  WAITING: 'WAITING',
+  MATCHED: 'MATCHED',
+  CANCELLED: 'CANCELLED',
+  TIMEOUT: 'TIMEOUT',
+} as const;
+export type MatchStatus = (typeof MatchStatus)[keyof typeof MatchStatus];
+
 export const SplitType = {
   EVENLY: 'EVENLY',
   BY_ITEM: 'BY_ITEM',
@@ -69,7 +82,6 @@ export const ExpenseStatus = {
 export type ExpenseStatus = (typeof ExpenseStatus)[keyof typeof ExpenseStatus];
 
 // --- 1. Bảng mã lỗi tập trung (`ErrorCode.java`) ---
-
 export const ApiErrorCode = {
   SUCCESS: 1000,
 
@@ -147,7 +159,6 @@ export type ApiErrorCodeKey = keyof typeof ApiErrorCode;
 export type ApiErrorCodeValue = (typeof ApiErrorCode)[ApiErrorCodeKey];
 
 // --- 2. Auth (`/api/v1/auth`) ---
-
 export interface AuthenticationRequest {
   username: string;
   password: string;
@@ -186,7 +197,6 @@ export interface ResetPasswordRequest {
 }
 
 // --- 3. Users (`/api/v1/users`) ---
-
 export interface UserCreationRequest {
   username: string;
   email: string;
@@ -220,7 +230,6 @@ export interface UserResponse {
 }
 
 // --- 4. Places (`/api/v1/places`) ---
-
 export interface PlaceCreationRequest {
   name: string;
   category?: string | null;
@@ -261,7 +270,6 @@ export interface PlaceResponse {
 }
 
 // --- 5. Tags (`/api/v1/tags`) ---
-
 export interface TagRequest {
   tagName: string;
 }
@@ -281,7 +289,6 @@ export interface UserTagResponse {
 }
 
 // --- 6. Friendships (`/api/v1/friendships`) ---
-
 export interface FriendshipResponse {
   requester: UserResponse;
   addressee: UserResponse;
@@ -290,13 +297,14 @@ export interface FriendshipResponse {
 }
 
 // --- 7. Rooms (`/api/v1/rooms`) ---
-
 export interface CreateRoomRequest {
   name?: string;
   latitude: number;
   longitude: number;
   radius?: number;
   deckSize?: number;
+  maxMembers?: number;
+  roomType?: RoomType;
 }
 
 export interface JoinRoomRequest {
@@ -313,6 +321,9 @@ export interface RoomResponse {
   roomCode: string;
   host: UserResponse;
   status: RoomStatus;
+  roomType?: RoomType;
+  maxMembers?: number;
+  currentMembers?: number;
   matchedPlace: PlaceResponse | null;
   latitude: number | null;
   longitude: number | null;
@@ -323,7 +334,6 @@ export interface RoomResponse {
 }
 
 // --- 8. Swipes (`/api/v1/swipes`) ---
-
 export interface SwipeRequest {
   roomId: UUID;
   placeId: UUID;
@@ -352,7 +362,6 @@ export interface MatchResponse {
 }
 
 // --- 9. Expenses (`/api/v1/expenses`) ---
-
 export interface ExpenseItemRequest {
   itemName: string;
   price: number;
@@ -397,4 +406,37 @@ export interface ExpenseResponse {
   items: ExpenseItemResponse[];
   splits: ExpenseSplitResponse[];
   fullyPaid: boolean;
+}
+
+// --- 10. Matchmaking (`/api/v1/matchmaking`) ---
+export interface MatchmakingRequest {
+  latitude: number;
+  longitude: number;
+  radius?: number;
+  targetGroupSize?: number;
+}
+
+export interface MatchmakingStatusResponse {
+  status: MatchStatus;
+  roomId?: UUID | null;
+  roomCode?: string | null;
+  message?: string | null;
+  targetGroupSize?: number | null;
+  currentQueueSize?: number | null;
+  matchedAt?: ISODateTimeString | null;
+  members?: UserResponse[] | null;
+}
+
+export interface PublicRoomResponse {
+  roomId: UUID;
+  name: string;
+  roomCode: string;
+  host: UserResponse;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  distance: number;
+  currentMembers: number;
+  maxMembers: number;
+  createdAt: ISODateTimeString;
 }
