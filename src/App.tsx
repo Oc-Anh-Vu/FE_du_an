@@ -119,19 +119,21 @@ function WorkspaceLayout({ kind }: { kind: "user" | "admin" }) {
         name: currentUser?.username || (isAdmin ? "Quản trị viên" : "Người dùng"),
         subtitle: hasAdminRole ? "Quản trị viên" : "Thành viên",
         avatarUrl: currentUser?.avatarUrl ?? undefined,
-        onClick: () => navigate("/app/profile"),
+        onClick: () => navigate(isAdmin ? "/admin" : "/app/profile"),
       }}
       onLogout={() => {
         void resetSessionAndStores()
         navigate("/login", { replace: true })
       }}
       sidebarPromo={
-        <Link
-          className="focus-ring block rounded-panel bg-surface-dark p-4 text-sm font-semibold text-surface-dark-foreground"
-          to={isAdmin ? "/app" : "/app/room"}
-        >
-          {isAdmin ? "Mở khu vực người dùng" : "Tạo phòng, rủ hội đi ăn"}
-        </Link>
+        isAdmin ? null : (
+          <Link
+            className="focus-ring block rounded-panel bg-surface-dark p-4 text-sm font-semibold text-surface-dark-foreground"
+            to="/app/room"
+          >
+            Tạo phòng, rủ hội đi ăn
+          </Link>
+        )
       }
     >
       <Outlet />
@@ -204,7 +206,7 @@ function AppRoutes() {
         <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
 
-      {/* 3. Nhóm Route người dùng (ProtectedRoute - yêu cầu đăng nhập) */}
+      {/* 3. Nhóm Route người dùng (ProtectedRoute - yêu cầu đăng nhập, chặn Admin) */}
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<WorkspaceLayout kind="user" />}>
           <Route index element={<Dashboard />} />
@@ -228,7 +230,7 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      {/* 4. Nhóm Route quản trị (AdminRoute - yêu cầu quyền ADMIN) */}
+      {/* 4. Nhóm Route quản trị (AdminRoute - yêu cầu quyền ADMIN, chặn User thường) */}
       <Route element={<AdminRoute />}>
         <Route path="/admin" element={<WorkspaceLayout kind="admin" />}>
           <Route index element={<AdminDashboard />} />
