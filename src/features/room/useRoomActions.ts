@@ -246,7 +246,8 @@ export function useRoomActions(): UseRoomActionsReturn {
       try {
         await roomService.leaveRoom(roomId);
         setCurrentRoom(null);
-        setActiveRooms(activeRooms.filter((r) => r.id !== roomId));
+        const currentActiveRooms = useRoomStore.getState().activeRooms;
+        setActiveRooms(currentActiveRooms.filter((r) => r.id !== roomId));
         useUIStore.getState().showToast('info', 'Bạn đã rời khỏi phòng ăn.');
         return true;
       } catch (err) {
@@ -258,7 +259,7 @@ export function useRoomActions(): UseRoomActionsReturn {
         setIsLoading(false);
       }
     },
-    [activeRooms, setActiveRooms, setCurrentRoom],
+    [setActiveRooms, setCurrentRoom],
   );
 
   /** Đóng phòng ăn (độc quyền Host) */
@@ -291,7 +292,8 @@ export function useRoomActions(): UseRoomActionsReturn {
       try {
         await roomService.deleteRoom(roomId);
         setCurrentRoom(null);
-        setActiveRooms(activeRooms.filter((r) => r.id !== roomId));
+        const currentActiveRooms = useRoomStore.getState().activeRooms;
+        setActiveRooms(currentActiveRooms.filter((r) => r.id !== roomId));
         useUIStore.getState().showToast('info', 'Đã xóa phòng ăn.');
         return true;
       } catch (err) {
@@ -303,7 +305,7 @@ export function useRoomActions(): UseRoomActionsReturn {
         setIsLoading(false);
       }
     },
-    [activeRooms, setActiveRooms, setCurrentRoom],
+    [setActiveRooms, setCurrentRoom],
   );
 
   const clearError = useCallback(() => {

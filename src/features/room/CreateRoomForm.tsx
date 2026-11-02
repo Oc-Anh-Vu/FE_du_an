@@ -28,7 +28,16 @@ export default function CreateRoomForm({
   const [radius, setRadius] = useState(5);
   const [deckSize, setDeckSize] = useState(15);
   const [coordinates, setCoordinates] = useState<GeoCoordinates | null>(initialCoords);
+  const [prevInitialCoords, setPrevInitialCoords] = useState<GeoCoordinates | null>(initialCoords);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Đồng bộ tọa độ bất đồng bộ khi GPS sẵn sàng từ trang cha (React adjusting state when prop changes)
+  if (initialCoords !== prevInitialCoords) {
+    setPrevInitialCoords(initialCoords);
+    if (initialCoords && !coordinates) {
+      setCoordinates(initialCoords);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
