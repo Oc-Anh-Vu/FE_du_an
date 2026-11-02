@@ -26,10 +26,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Docker & Nginx Configs
-Dockerfile
-.dockerignore
-nginx.conf
+
 
 # Environment variables
 .env
