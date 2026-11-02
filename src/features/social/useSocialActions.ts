@@ -158,7 +158,7 @@ export function useSocialActions(): UseSocialActionsReturn {
     }
   }, []);
 
-  /** Tìm kiếm người dùng, hỗ trợ fallback nhập UUID khi gặp lỗi 403 */
+  /** Tìm kiếm người dùng theo tên (hỗ trợ BE query ?name=) hoặc theo UUID */
   const searchUsersOrFallbackByUuid = useCallback(async (query: string): Promise<UserResponse[]> => {
     const trimmed = query.trim();
     if (!trimmed) {
@@ -173,19 +173,25 @@ export function useSocialActions(): UseSocialActionsReturn {
     const isUuid = UUID_REGEX.test(trimmed);
 
     try {
-      // Gọi userService.getUsers()
-      const allUsers = await userService.getUsers();
+      // 1. Gọi userService.getUsers(trimmed) với query name mới của BE
+      let results = await userService.getUsers(trimmed);
       setIsSearchForbidden(false);
 
-      const filtered = (allUsers ?? []).filter((user) => {
-        const matchesName = user.username.toLowerCase().includes(trimmed.toLowerCase());
-        const matchesEmail = user.email.toLowerCase().includes(trimmed.toLowerCase());
-        const matchesId = user.id.toLowerCase() === trimmed.toLowerCase();
-        return matchesName || matchesEmail || matchesId;
-      });
+      // Nếu truyền UUID và kết quả theo tên rỗng, thử tra cứu chính xác theo ID
+      if (isUuid && (!results || results.length === 0)) {
+        try {
+          const directUser = await userService.getUserById(trimmed);
+          if (directUser) {
+            results = [directUser];
+          }
+        } catch {
+          // Bỏ qua lỗi tra cứu theo ID
+        }
+      }
 
-      setSearchResults(filtered);
-      return filtered;
+      const list = Array.isArray(results) ? results : [];
+      setSearchResults(list);
+      return list;
     } catch (err) {
       const is403 =
         (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 403) ||
@@ -194,7 +200,6 @@ export function useSocialActions(): UseSocialActionsReturn {
       if (is403) {
         setIsSearchForbidden(true);
         if (isUuid) {
-          // Tạo một đối tượng giả lập để người dùng có thể gửi kết bạn trực tiếp qua UUID
           const fallbackUser: UserResponse = {
             id: trimmed,
             username: `Người dùng (${trimmed.slice(0, 8)}...)`,
