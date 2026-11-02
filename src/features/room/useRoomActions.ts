@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { CreateRoomRequest, RoomResponse, UUID } from '../../types';
+import type {
+  CreateRoomRequest,
+  MemberJoinedSocketData,
+  MemberLeftSocketData,
+  MatchFoundSocketData,
+  RoomResponse,
+  RoomSocketEvent,
+  UUID,
+} from '../../types';
 import { ApiErrorCode, RoomStatus } from '../../types';
 import { roomService } from '../../services/room.service';
 import { useRoomStore } from '../../store/roomStore';
@@ -23,6 +31,7 @@ export interface UseRoomActionsReturn {
   leaveCurrentRoom: (roomId: UUID) => Promise<boolean>;
   closeCurrentRoom: (roomId: UUID) => Promise<boolean>;
   deleteCurrentRoom: (roomId: UUID) => Promise<boolean>;
+  handleRoomSocketEvent: (event: RoomSocketEvent) => void;
   clearError: () => void;
 }
 
@@ -102,7 +111,7 @@ export function useRoomActions(): UseRoomActionsReturn {
     }
   }, [setActiveRooms]);
 
-  /** Lấy chi tiết phòng ăn và bắt mã lỗi 2001/2007 để Page điều hướng */
+  /** Tải chi tiết một phòng ăn cụ thể */
   const fetchRoomDetails = useCallback(
     async (
       roomId: UUID,
@@ -110,27 +119,20 @@ export function useRoomActions(): UseRoomActionsReturn {
       setIsLoading(true);
       setError(null);
       try {
-        const room = await roomService.getRoomDetails(roomId);
+        const room = await roomService.getRoomById(roomId);
         setCurrentRoom(room);
         return { success: true, room };
       } catch (err) {
         const message = getErrorMessage(err, 'Không thể tải thông tin phòng ăn.');
         setError(message);
-
-        const errorCode =
-          err && typeof err === 'object' && 'code' in err
-            ? (err as { code: number }).code
-            : undefined;
-
+        const errObj = err as { code?: number; status?: number } | undefined;
         const isNotFoundOrForbidden =
-          errorCode === ApiErrorCode.ROOM_NOT_FOUND ||
-          errorCode === ApiErrorCode.NOT_ROOM_MEMBER;
+          errObj?.code === ApiErrorCode.ROOM_NOT_FOUND ||
+          errObj?.code === ApiErrorCode.NOT_ROOM_MEMBER ||
+          errObj?.status === 404 ||
+          errObj?.status === 403;
 
-        return {
-          success: false,
-          isNotFoundOrForbidden,
-          error: message,
-        };
+        return { success: false, isNotFoundOrForbidden, error: message };
       } finally {
         setIsLoading(false);
       }
@@ -138,16 +140,16 @@ export function useRoomActions(): UseRoomActionsReturn {
     [setCurrentRoom],
   );
 
-  /** Tạo phòng ăn mới */
+  /** Tạo một phòng ăn mới */
   const createNewRoom = useCallback(
     async (payload: CreateRoomRequest): Promise<RoomResponse | null> => {
       setIsLoading(true);
       setError(null);
       try {
-        const newRoom = await roomService.createRoom(payload);
-        setCurrentRoom(newRoom);
-        useUIStore.getState().showToast('success', 'Đã tạo phòng ăn mới thành công!');
-        return newRoom;
+        const room = await roomService.createRoom(payload);
+        setCurrentRoom(room);
+        useUIStore.getState().showToast('success', `Đã tạo phòng ăn "${room.name || room.roomCode}" thành công!`);
+        return room;
       } catch (err) {
         const message = getErrorMessage(err, 'Không thể tạo phòng ăn mới.');
         setError(message);
@@ -160,24 +162,26 @@ export function useRoomActions(): UseRoomActionsReturn {
     [setCurrentRoom],
   );
 
-  /** Tham gia phòng ăn bằng mã code 6 ký tự */
+  /** Tham gia phòng ăn bằng mã phòng */
   const joinRoomByCode = useCallback(
     async (roomCode: string): Promise<RoomResponse | null> => {
-      const normalizedCode = roomCode.trim().toUpperCase();
-      if (!normalizedCode) {
-        useUIStore.getState().showToast('warning', 'Vui lòng nhập mã phòng gồm 6 ký tự.');
+      const cleanCode = roomCode.trim().toUpperCase();
+      if (!cleanCode) {
+        const message = 'Vui lòng nhập mã phòng hợp lệ.';
+        setError(message);
+        useUIStore.getState().showToast('warning', message);
         return null;
       }
 
       setIsLoading(true);
       setError(null);
       try {
-        const joinedRoom = await roomService.joinRoom(normalizedCode);
-        setCurrentRoom(joinedRoom);
-        useUIStore.getState().showToast('success', 'Đã tham gia phòng ăn thành công!');
-        return joinedRoom;
+        const room = await roomService.joinRoom(cleanCode);
+        setCurrentRoom(room);
+        useUIStore.getState().showToast('success', `Đã tham gia phòng "${room.name || room.roomCode}" thành công!`);
+        return room;
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể tham gia phòng ăn.');
+        const message = getErrorMessage(err, 'Không thể tham gia phòng ăn bằng mã này.');
         setError(message);
         useUIStore.getState().showToast('danger', message);
         return null;
@@ -188,15 +192,15 @@ export function useRoomActions(): UseRoomActionsReturn {
     [setCurrentRoom],
   );
 
-  /** Bắt đầu phiên quẹt thẻ chọn quán ăn (độc quyền Host) */
+  /** Chủ phòng bấm bắt đầu quẹt thẻ */
   const startRoomSwiping = useCallback(
     async (roomId: UUID): Promise<boolean> => {
       setIsLoading(true);
       setError(null);
       try {
-        await roomService.startSwiping(roomId);
+        await roomService.startRoom(roomId);
         updateCurrentRoomStatus(RoomStatus.SWIPING);
-        useUIStore.getState().showToast('success', 'Đã bắt đầu phiên quẹt thẻ chọn quán!');
+        useUIStore.getState().showToast('info', 'Phiên quẹt thẻ đã bắt đầu! Đang vào bàn quẹt...');
         return true;
       } catch (err) {
         const message = getErrorMessage(err, 'Không thể bắt đầu phiên quẹt thẻ.');
@@ -210,24 +214,18 @@ export function useRoomActions(): UseRoomActionsReturn {
     [updateCurrentRoomStatus],
   );
 
-  /** Đá thành viên khỏi phòng (độc quyền Host) */
+  /** Chủ phòng mời thành viên ra khỏi phòng */
   const kickRoomMember = useCallback(
     async (roomId: UUID, memberUserId: UUID): Promise<boolean> => {
       setIsLoading(true);
       setError(null);
       try {
         await roomService.kickMember(roomId, memberUserId);
-
-        // Cập nhật lại danh sách thành viên trong state phòng hiện tại
-        if (currentRoom && currentRoom.id === roomId && Array.isArray(currentRoom.members)) {
-          const updatedMembers = currentRoom.members.filter((m) => m.id !== memberUserId);
-          setCurrentRoom({ ...currentRoom, members: updatedMembers });
-        }
-
-        useUIStore.getState().showToast('info', 'Đã xóa thành viên khỏi phòng ăn.');
+        useRoomStore.getState().removeRoomMember(memberUserId);
+        useUIStore.getState().showToast('success', 'Đã mời thành viên ra khỏi phòng.');
         return true;
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể xóa thành viên khỏi phòng.');
+        const message = getErrorMessage(err, 'Không thể mời thành viên ra khỏi phòng.');
         setError(message);
         useUIStore.getState().showToast('danger', message);
         return false;
@@ -235,10 +233,10 @@ export function useRoomActions(): UseRoomActionsReturn {
         setIsLoading(false);
       }
     },
-    [currentRoom, setCurrentRoom],
+    [],
   );
 
-  /** Rời khỏi phòng ăn hiện tại */
+  /** Thành viên tự rời phòng */
   const leaveCurrentRoom = useCallback(
     async (roomId: UUID): Promise<boolean> => {
       setIsLoading(true);
@@ -246,8 +244,6 @@ export function useRoomActions(): UseRoomActionsReturn {
       try {
         await roomService.leaveRoom(roomId);
         setCurrentRoom(null);
-        const currentActiveRooms = useRoomStore.getState().activeRooms;
-        setActiveRooms(currentActiveRooms.filter((r) => r.id !== roomId));
         useUIStore.getState().showToast('info', 'Bạn đã rời khỏi phòng ăn.');
         return true;
       } catch (err) {
@@ -259,10 +255,10 @@ export function useRoomActions(): UseRoomActionsReturn {
         setIsLoading(false);
       }
     },
-    [setActiveRooms, setCurrentRoom],
+    [setCurrentRoom],
   );
 
-  /** Đóng phòng ăn (độc quyền Host) */
+  /** Chủ phòng đóng phòng */
   const closeCurrentRoom = useCallback(
     async (roomId: UUID): Promise<boolean> => {
       setIsLoading(true);
@@ -270,7 +266,7 @@ export function useRoomActions(): UseRoomActionsReturn {
       try {
         await roomService.closeRoom(roomId);
         updateCurrentRoomStatus(RoomStatus.CLOSED);
-        useUIStore.getState().showToast('info', 'Đã đóng phòng ăn thành công.');
+        useUIStore.getState().showToast('info', 'Phòng ăn đã được đóng lại.');
         return true;
       } catch (err) {
         const message = getErrorMessage(err, 'Không thể đóng phòng ăn.');
@@ -284,7 +280,7 @@ export function useRoomActions(): UseRoomActionsReturn {
     [updateCurrentRoomStatus],
   );
 
-  /** Xóa hoàn toàn phòng ăn (độc quyền Host) */
+  /** Chủ phòng xóa/giải tán phòng */
   const deleteCurrentRoom = useCallback(
     async (roomId: UUID): Promise<boolean> => {
       setIsLoading(true);
@@ -292,9 +288,8 @@ export function useRoomActions(): UseRoomActionsReturn {
       try {
         await roomService.deleteRoom(roomId);
         setCurrentRoom(null);
-        const currentActiveRooms = useRoomStore.getState().activeRooms;
-        setActiveRooms(currentActiveRooms.filter((r) => r.id !== roomId));
-        useUIStore.getState().showToast('info', 'Đã xóa phòng ăn.');
+        setActiveRooms(activeRooms.filter((r) => r.id !== roomId));
+        useUIStore.getState().showToast('success', 'Đã giải tán phòng ăn.');
         return true;
       } catch (err) {
         const message = getErrorMessage(err, 'Không thể xóa phòng ăn.');
@@ -305,8 +300,45 @@ export function useRoomActions(): UseRoomActionsReturn {
         setIsLoading(false);
       }
     },
-    [setActiveRooms, setCurrentRoom],
+    [activeRooms, setActiveRooms, setCurrentRoom],
   );
+
+  /** Xử lý sự kiện nhận được từ WebSocket STOMP */
+  const handleRoomSocketEvent = useCallback((event: RoomSocketEvent) => {
+    if (!event || !event.type) return;
+
+    switch (event.type) {
+      case 'MEMBER_JOINED': {
+        const data = event.data as MemberJoinedSocketData;
+        if (data?.user) {
+          useRoomStore.getState().addRoomMember(data.user, data.currentMembersCount);
+        }
+        break;
+      }
+      case 'MEMBER_LEFT': {
+        const data = event.data as MemberLeftSocketData;
+        if (data?.user?.id) {
+          useRoomStore.getState().removeRoomMember(data.user.id, data.currentMembersCount, data.newHostId);
+        }
+        break;
+      }
+      case 'GAME_STARTED': {
+        useRoomStore.getState().updateCurrentRoomStatus(RoomStatus.SWIPING);
+        break;
+      }
+      case 'MATCH_FOUND': {
+        const data = event.data as MatchFoundSocketData;
+        if (data?.matchedPlace) {
+          useRoomStore.getState().setRoomMatchedPlace(data.matchedPlace);
+        }
+        break;
+      }
+      case 'ROOM_CLOSED': {
+        useRoomStore.getState().updateCurrentRoomStatus(RoomStatus.CLOSED);
+        break;
+      }
+    }
+  }, []);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -327,6 +359,7 @@ export function useRoomActions(): UseRoomActionsReturn {
     leaveCurrentRoom,
     closeCurrentRoom,
     deleteCurrentRoom,
+    handleRoomSocketEvent,
     clearError,
   };
 }
