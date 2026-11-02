@@ -1,141 +1,100 @@
-# 🍽️ Hôm Nay Ăn Gì? (What To Eat Today?)
+# 🍽️ Hôm Nay Ăn Gì? — Nền Tảng Chọn Quán & Kết Nối Ẩm Thực Thông Minh
 
-> Một ứng dụng mạng xã hội ẩm thực thời gian thực (Real-time), giúp các nhóm bạn giải quyết câu hỏi muôn thuở: "Hôm nay ăn gì?" thông qua cơ chế quẹt thẻ (Tinder-like) và tích hợp hệ thống chia tiền (Bill Splitting) thông minh qua mã QR.
+<p align="center">
+  <strong>Giải pháp cứu cánh cho câu hỏi muôn thuở của mọi nhóm bạn: <em>"Hôm nay ăn gì? Trưa nay đi đâu?"</em></strong>
+</p>
 
-## Trạng thái Frontend
-
-Frontend hiện có khung định tuyến và các trang placeholder theo `docs/FE_SPEC.md`; các trang này chưa kết nối API, xác thực, store hoặc nghiệp vụ. Các luồng chưa có hợp đồng Backend được ghi rõ là đang chờ, không dùng dữ liệu giả để mô phỏng kết quả. Bản demo component được giữ tại `src/AppDemo.tsx` nhưng không nằm trong các route sản phẩm.
-
----
-
-## 🚀 1. Công Nghệ Sử Dụng (Tech Stack)
-
-### 🎨 Frontend (Web/Mobile Web)
-*   **Core:** React.js, TypeScript, Vite.
-*   **Styling:** Tailwind CSS.
-*   **Animation:** `framer-motion` (Xử lý hiệu ứng quẹt thẻ mượt mà).
-*   **Real-time:** `socket.io-client` / `sockjs-client` (Giao tiếp WebSockets).
-*   **State Management:** Zustand hoặc Redux Toolkit.
-
-### ⚙️ Backend (API & Realtime Server)
-*   **Core:** Java Spring Boot.
-*   **Architecture:** MVC (Controller - Service - Repository).
-*   **Database Access:** Spring Data JPA (Hibernate).
-*   **Real-time:** Spring WebSocket + STOMP (Đồng bộ phòng & quẹt thẻ).
-*   **Security:** Spring Security & JWT.
-*   **Documentation:** Swagger (Springdoc-openapi).
-
-### 🗄️ Database & Infrastructure
-*   **RDBMS:** PostgreSQL (Xử lý dữ liệu quan hệ, hóa đơn, người dùng).
-*   **In-Memory / Queue:** Redis (Bắt buộc cho hệ thống Hàng đợi Matchmaking siêu tốc).
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80" alt="Hôm Nay Ăn Gì Banner" width="100%" style="border-radius: 12px; max-height: 400px; object-fit: cover;" />
+</p>
 
 ---
 
-## 🌟 2. Các Tính Năng Cốt Lõi
+## 💡 Giới Thiệu Chung
 
-1.  **Khám Phá Địa Điểm (Place Discovery):** Lướt xem danh sách quán ăn, lọc theo tọa độ GPS (gần nhất) hoặc theo phân khúc giá.
-2.  **Quản Lý Phòng Thời Gian Thực (Room Management):** Tạo phòng, mời bạn bè, đồng bộ trạng thái "Sẵn sàng" của các thành viên qua STOMP WebSockets.
-3.  **Cơ Chế Quẹt Thẻ (Tinder-like Swiping):** 
-    *   Vuốt trái/phải để chọn quán.
-    *   Hiệu ứng realtime (thả tim) khi có người vừa "Like".
-    *   Thuật toán Matching: Chốt đơn khi 100% thành viên Like, hoặc fallback chọn quán có lượt Like cao nhất nếu hết thẻ.
-4.  **Hệ Thống Chia Tiền (Bill Splitting) & Nhắc Nợ:**
-    *   **Cơ chế 1 (Chi tiết):** Chọn món từng người ăn, hệ thống tự chia tiền món chung và cộng dồn.
-    *   **Cơ chế 2 (Nhanh):** Nhập tay số tiền từng người, có Smart Validation chống lệch bill.
-    *   Tự động tạo mã **VietQR** động để thanh toán nhanh, theo dõi trạng thái `is_paid`.
-5.  **Ghép Phòng Ngẫu Nhiên (Tag-based Matchmaking):** Dành cho người đi ăn Solo. Chọn tag tâm trạng (VD: "Thèm bia"), hệ thống đưa vào Redis Queue và tự động ghép nhóm những người cùng sở thích trong bán kính gần.
-6.  **Hệ Thống Bạn Bè:** Kết bạn, xem trạng thái Online/Offline, mời trực tiếp vào phòng (One-click Invite).
+Bạn đã bao giờ rơi vào cảnh cả nhóm bạn đứng giữa ngã tư đường và hỏi nhau *"Ăn gì cũng được"*, nhưng gợi ý món nào cũng bị từ chối? 
+
+**Hôm Nay Ăn Gì?** ra đời để biến việc lựa chọn quán ăn từ một cuộc tranh luận kéo dài thành một **trò chơi tương tác nhóm thú vị, công bằng và nhanh chóng**. Ứng dụng kết hợp giữa trải nghiệm quẹt thẻ trực quan (tương tự Tinder), công nghệ đồng bộ thời gian thực, radar tìm bạn cùng khẩu vị và tính năng quyết toán hóa đơn tự động qua mã VietQR.
 
 ---
 
-## 🔄 3. Luồng Hoạt Động (Workflows)
+## ✨ Điểm Nhấn & Tính Năng Nổi Bật
 
-Hệ thống được thiết kế với 6 luồng hoạt động chính:
-1.  **Account & Social Flow:** Đăng nhập (Guest/Google) -> Cấp quyền GPS -> Kết bạn -> Theo dõi trạng thái Online.
-2.  **Personal Flow:** Lướt xem quán ăn -> Quẹt thẻ đi ăn 1 mình -> Quản lý sổ nợ cá nhân.
-3.  **Private Group Flow:** Tạo phòng -> Lấy `room_code` / Mời bạn bè -> Ready -> Bắt đầu quẹt.
-4.  **Matchmaking Flow:** Khai báo Tag -> Chờ tại Radar (Redis) -> Tự động chốt nhóm 2-4 người -> Vào phòng ẩn.
-5.  **Core Swiping Flow:** Quẹt thẻ (có Debounce) -> Broadcast WS STOMP -> Chốt đơn (Match) / Fallback.
-6.  **Billing Flow:** Khởi tạo Hóa đơn -> Chọn cơ chế chia tiền -> Gen QR Code -> Bắn thông báo nhắc nợ -> Xác nhận thanh toán.
+### 🎴 1. Quẹt Thẻ Chọn Quán Nhóm (Group Swipe & Instant Match)
+- **Cơ chế biểu quyết trực quan:** Các thành viên trong phòng cùng lướt qua bộ sưu tập quán ngon quanh vị trí hiện tại. Vuốt sang phải nếu bạn "thích", vuốt sang trái để "bỏ qua".
+- **Khoảnh khắc bùng nổ (Consensus Match):** Ngay khi tất cả thành viên trong nhóm cùng thích chung một quán ăn, hệ thống sẽ lập tức khóa quán và kích hoạt hiệu ứng pháo hoa rực rỡ để chúc mừng!
+- **Tương tác sinh động:** Hiệu ứng bắn tim thời gian thực xuất hiện mỗi khi có người trong phòng vừa ưng ý một địa điểm.
+
+### 📡 2. Radar Dò Tìm Bạn Ăn & Khám Phá Phòng Công Khai
+- **Đi ăn một mình nhưng không cô đơn:** Kích hoạt chế độ Radar để tìm kiếm những người bạn có cùng "gu" ăn uống hoặc cùng tâm trạng (thèm lẩu cay, đồ nướng, món thanh đạm...) trong khu vực lân cận.
+- **Tham gia tức thì:** Khám phá danh sách các phòng ăn công khai xung quanh bạn và tham gia chỉ với một nút bấm.
+
+### 📍 3. Gợi Ý Quán Thông Minh Theo GPS & Tâm Trạng (Mood Tags)
+- **Bộ lọc vị trí chính xác:** Tự động tìm kiếm các quán ăn chất lượng theo bán kính GPS linh hoạt (1km, 3km, 5km, 10km).
+- **Chọn quán theo cảm xúc:** Lựa chọn các thẻ tâm trạng ẩm thực trong ngày để nhận danh sách gợi ý phù hợp nhất với khẩu vị hôm nay.
+- **Chế độ Solo (Ăn Một Mình):** Bạn muốn tự thưởng cho bản thân một bữa ngon? Bật chế độ Solo để quẹt thẻ và tìm quán cho riêng mình trong tích tắc.
+
+### 💸 4. Quyết Toán Hóa Đơn & Mã VietQR Tự Động
+- **Không còn cảnh "ngại ngùng" tính tiền:** Sau bữa ăn, chủ phòng có thể tạo hóa đơn và chia tiền minh bạch: chia đều cho cả nhóm (`EVENLY`) hoặc chia chi tiết theo từng món (`BY_ITEM`).
+- **Thanh toán 1 chạm:** Tự động tạo mã chuyển khoản ngân hàng **VietQR** chuẩn xác kèm số tiền và nội dung cho từng người, quét mã thanh toán xong ngay trong 3 giây.
+- **Theo dõi công nợ rõ ràng:** Quản lý danh sách các khoản nợ bữa ăn cá nhân, nhận thông báo nhắc nhở thanh toán văn minh.
+
+### 👥 5. Kết Nối Bạn Bè & Lời Mời Trực Tiếp
+- **Mạng xã hội ẩm thực:** Kết bạn, quản lý danh bạ những "cạ cứng" ăn uống.
+- **Mời bạn một chạm:** Mời bạn bè tham gia phòng ăn nhanh chóng qua mã phòng 6 ký tự hoặc thông báo lời mời trực tiếp trên màn hình.
 
 ---
 
-## 📂 4. Cấu Trúc Thư Mục
+## 🎯 Trải Nghiệm 4 Bước Đơn Giản
 
-### Frontend (React + TS)
-Cấu trúc theo hướng **Feature-based**, giúp dự án dễ dàng mở rộng:
-```text
-src/
- ┣ 📂 assets/           # Ảnh, icon, Lottie files
- ┣ 📂 components/       # UI Components dùng chung (Button, Avatar, Modal, QRCodeDisplay)
- ┣ 📂 features/         # Logic nghiệp vụ
- ┃ ┣ 📂 auth/           # Đăng nhập, GPS
- ┃ ┣ 📂 social/         # Bạn bè, Invite Popup
- ┃ ┣ 📂 matchmaking/    # Chọn Tag, Radar Queue
- ┃ ┣ 📂 room/           # Lobby, MemberGrid
- ┃ ┣ 📂 swipe/          # SwipeDeck, FramerCard, MatchResult
- ┃ ┗ 📂 billing/        # ItemizedOrder, ManualSplit, DebtWidget
- ┣ 📂 hooks/            # useAuth, useSocket, useGeolocation, useDebounce
- ┣ 📂 pages/            # HomePage, ExplorePage, RoomProcessPage, BillingPage
- ┣ 📂 services/         # apiClient (Axios), socketClient
- ┣ 📂 store/            # userStore, roomStore (Zustand)
- ┗ 📂 utils/            # geoCalculator (Haversine), currencyFormat
+```mermaid
+flowchart LR
+    A["1. Tạo Phòng / Bật Radar"] --> B["2. Rủ Bạn Bè"]
+    B --> C["3. Cùng Quẹt Thẻ"]
+    C --> D["4. Chốt Quán & VietQR"]
 ```
 
-### Backend (Spring Boot)
-Thiết kế theo kiến trúc **Phân lớp (Layered Architecture)**:
-```text
-src/main/java/com/utt/homnayangi/
- ┣ 📂 config/           # SecurityConfig, WebSocketConfig, RedisConfig, SwaggerConfig
- ┣ 📂 controller/       
- ┃ ┣ 📂 api/            # AuthController, PlaceController, RoomController, BillingController...
- ┃ ┗ 📂 ws/             # RoomSocket, PresenceSocket (Xử lý bản tin STOMP)
- ┣ 📂 service/          # AuthService, RoomService, SwipeMatchService, MatchmakingWorker...
- ┣ 📂 repository/       # JpaRepository (PostgreSQL) + QueueRepository (Redis)
- ┣ 📂 model/            # entity, dto, enums
- ┣ 📂 security/         # JwtTokenProvider, JwtAuthenticationFilter
- ┗ 📂 exception/        # GlobalExceptionHandler
+1. **Bước 1 — Khởi tạo:** Tạo phòng ăn riêng tư cùng hội bạn hoặc bật Radar tìm kiếm nhóm ăn công khai theo vị trí và tâm trạng.
+2. **Bước 2 — Tập hợp:** Gửi mã phòng 6 ký tự cho bạn bè cùng vào sảnh chờ.
+3. **Bước 3 — Lướt thẻ:** Cả nhóm cùng quẹt các quán ăn hấp dẫn được tuyển chọn quanh khu vực.
+4. **Bước 4 — Thưởng thức & Thanh toán:** Cùng đến quán ăn đã được chốt chung, tận hưởng bữa ăn và chia tiền nhanh gọn qua VietQR!
+
+---
+
+## 🎨 Trải Nghiệm Giao Diện Hiện Đại (UI/UX)
+
+- **Thiết kế Mobile-First:** Giao diện tối ưu hoàn hảo cho điện thoại thông minh, đồng thời tương thích mượt mà trên máy tính bảng và màn hình máy tính.
+- **Cử chỉ mượt mà:** Hiệu ứng vuốt chạm tự nhiên, phản hồi xúc giác nhẹ nhàng và chuyển cảnh tinh tế mang lại cảm giác thích thú khi sử dụng.
+- **Đồng bộ thời gian thực:** Kết nối ổn định, tự động cập nhật mọi hành động của bạn bè trong phòng chờ và bàn quẹt mà không cần tải lại trang.
+
+---
+
+## 🚀 Bắt Đầu Trải Nghiệm Nhanh
+
+Nếu bạn là nhà phát triển hoặc người muốn trải nghiệm thử nghiệm ứng dụng trên máy cá nhân:
+
+### 1. Cài đặt mã nguồn
+```bash
+# Cài đặt các gói phụ thuộc
+npm install
+```
+
+### 2. Khởi chạy ứng dụng
+```bash
+# Khởi chạy giao diện thử nghiệm
+npm run dev
+```
+👉 Mở trình duyệt và truy cập: **`http://localhost:5173`**
+
+### 3. Đóng gói ứng dụng
+```bash
+npm run build
 ```
 
 ---
 
-## 🗄️ 5. Thiết Kế Cơ Sở Dữ Liệu (PostgreSQL)
+## 💌 Thông Điệp Từ Đội Ngũ Phát Triển
 
-Hệ thống sử dụng `UUID` cho các khóa chính và bao gồm 12 bảng cốt lõi:
-*   **User & Social:** `users`, `friendships`
-*   **Matchmaking:** `tags`, `user_tags`
-*   **Discovery:** `places` (Tích hợp GPS Latitude/Longitude)
-*   **Room & Swiping:** `rooms`, `room_members`, `swipes` (Có cờ chống spam)
-*   **Billing (Chia tiền):** `expenses`, `expense_items`, `item_sharers`, `expense_splits`
+> *"Bữa ăn ngon không chỉ nằm ở hương vị món ăn, mà còn ở sự vui vẻ, gắn kết và đồng điệu của những người cùng ngồi chung một bàn."*
 
----
-
-## 🛠️ 6. Hướng Dẫn Cài Đặt (Local Development)
-
-### Yêu cầu môi trường
-*   Node.js v18+
-*   Java JDK 17+
-*   PostgreSQL 14+
-*   Redis Server (Đang chạy ở port 6379)
-
-### Setup Backend
-1. Clone dự án và mở thư mục backend bằng IntelliJ IDEA.
-2. Tạo database `homnayangi` trong PostgreSQL.
-3. Cấu hình thông tin DB và Redis trong file `src/main/resources/application.yml`.
-4. Chạy file `schema.sql` để khởi tạo các bảng.
-5. Chạy ứng dụng Spring Boot. Swagger UI sẽ có tại: `http://localhost:8080/swagger-ui.html`
-
-### Setup Frontend
-1. Mở thư mục frontend bằng VS Code.
-2. Cài đặt dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy file `.env.example` thành `.env` và cấu hình các biến môi trường (API URL, Socket URL).
-4. Khởi chạy server dev:
-   ```bash
-   npm run dev
-   ```
-
----
-*Dự án "Hôm Nay Ăn Gì" - Giải pháp công nghệ cho những cái bụng đói.*
+**Hôm Nay Ăn Gì?** mong muốn trở thành người bạn đồng hành thân thiết, giúp mọi cuộc hẹn ăn uống của bạn và người thân luôn tràn ngập niềm vui và sự hào hứng!
