@@ -24,6 +24,7 @@ export default function MatchmakingQueue() {
 
   const {
     matchmakingStatus,
+    error,
     publicRooms,
     isLoadingPublicRooms,
     isSubmitting,
@@ -141,12 +142,15 @@ export default function MatchmakingQueue() {
 
       <RadarQueueView
         matchmakingStatus={matchmakingStatus}
+        error={error}
         publicRooms={publicRooms}
         isLoadingPublicRooms={isLoadingPublicRooms}
         isCancelling={isSubmitting}
         onCancelQueue={handleCancelQueue}
         onJoinPublicRoom={handleJoinPublicRoom}
         onCreateRoomInstead={() => navigate('/app/room/new')}
+        onStartMatchmaking={() => navigate('/app/room/match')}
+        onRetry={() => void pollMatchStatus()}
         onRefreshPublicRooms={() => {
           if (coordinates) {
             void fetchNearbyPublicRooms(coordinates.latitude, coordinates.longitude, 10);
