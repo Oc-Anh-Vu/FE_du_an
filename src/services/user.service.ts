@@ -8,6 +8,10 @@ export function getMyInfo(): Promise<UserResponse> {
   return apiGet<UserResponse>(`${USERS_BASE_PATH}/me`);
 }
 
+export function updateMyInfo(payload: UserUpdateRequest): Promise<UserResponse> {
+  return apiPut<UserResponse, UserUpdateRequest>(`${USERS_BASE_PATH}/me`, payload);
+}
+
 export function createUser(payload: UserCreationRequest): Promise<UserResponse> {
   return apiPost<UserResponse, UserCreationRequest>(USERS_BASE_PATH, payload);
 }
@@ -36,6 +40,7 @@ export function deleteUser(userId: UUID): Promise<string> {
 
 export const userService = {
   getMyInfo,
+  updateMyInfo,
   createUser,
   getUsers,
   getUserById,

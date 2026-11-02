@@ -1,14 +1,13 @@
 // Trang Hồ sơ cá nhân: thông tin tài khoản, cấu hình ngân hàng VietQR & sở thích ẩm thực
 import { useCallback, useEffect, useState } from 'react';
 import {
-  QrCode,
+  Calendar,
+  Mail,
   Save,
   Shield,
   Tag as TagIcon,
-  User,
-  Calendar,
-  Mail,
   Trash2,
+  User,
 } from 'lucide-react';
 import { useAuthActions } from '../../features/auth/useAuthActions';
 import { useUserStore } from '../../store/userStore';
@@ -23,13 +22,20 @@ import { Stack } from '../../components/layout/Stack';
 import { Card } from '../../components/ui/display/Card';
 import { Avatar } from '../../components/ui/display/Avatar';
 import { Badge } from '../../components/ui/display/Badge';
+import { QRCodeDisplay } from '../../components/ui/display/QRCodeDisplay';
 import { Button } from '../../components/ui/form/Button';
 import { Input } from '../../components/ui/form/Input';
+import { BankSelect } from '../../components/ui/form/BankSelect';
 import { Tag } from '../../components/ui/form/Tag';
 import { Switch } from '../../components/ui/form/Switch';
 import { Alert } from '../../components/ui/feedback/Alert';
 import { Spinner } from '../../components/ui/feedback/Spinner';
 import { EmptyState } from '../../components/ui/feedback/EmptyState';
+import {
+  buildVietQRUrl,
+  getBankByBin,
+  normalizeAccountName,
+} from '../../utils/vietqrBanks';
 
 function formatDateVN(dateStr: string): string {
   try {
@@ -78,7 +84,7 @@ function BankFormSection({
     e.preventDefault();
     const trimmedBin = bankBin.trim();
     const trimmedAccNum = bankAccountNumber.trim();
-    const trimmedAccName = bankAccountName.trim().toUpperCase();
+    const trimmedAccName = normalizeAccountName(bankAccountName.trim());
 
     const success = await onSubmitBank({
       bankBin: trimmedBin || null,
@@ -90,11 +96,7 @@ function BankFormSection({
       setHasFormChanges(false);
       if (trimmedBin && trimmedAccNum) {
         onQrUrlChange(
-          `https://img.vietqr.io/image/${encodeURIComponent(trimmedBin)}-${encodeURIComponent(
-            trimmedAccNum,
-          )}-compact2.png?amount=50000&addInfo=Demo%20Hom%20Nay%20An%20Gi&accountName=${encodeURIComponent(
-            trimmedAccName || 'NGUOI NHAN',
-          )}`,
+          buildVietQRUrl(trimmedBin, trimmedAccNum, trimmedAccName),
         );
       } else {
         onQrUrlChange(null);
@@ -122,15 +124,15 @@ function BankFormSection({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Mã BIN ngân hàng"
-              placeholder="VD: 970422 (MB), 970436 (VCB)"
+            <BankSelect
+              label="Ngân hàng nhận tiền"
+              hint="Chọn ngân hàng theo chuẩn Napas247 / VietQR"
               value={bankBin}
-              onChange={(e) => {
-                setBankBin(e.target.value);
+              onChange={(selectedBin) => {
+                setBankBin(selectedBin);
                 setHasFormChanges(true);
               }}
-              hint="Mã 6 chữ số theo chuẩn Napas/VietQR"
+              required
             />
 
             <Input
@@ -138,10 +140,12 @@ function BankFormSection({
               placeholder="VD: 0123456789"
               value={bankAccountNumber}
               onChange={(e) => {
-                setBankAccountNumber(e.target.value);
+                const digits = e.target.value.replace(/[^0-9]/g, '');
+                setBankAccountNumber(digits);
                 setHasFormChanges(true);
               }}
-              hint="Số tài khoản thụ hưởng của bạn"
+              hint="Chỉ nhập các chữ số tài khoản thụ hưởng"
+              required
             />
           </div>
 
@@ -150,10 +154,12 @@ function BankFormSection({
             placeholder="VD: NGUYEN VAN A"
             value={bankAccountName}
             onChange={(e) => {
-              setBankAccountName(e.target.value.toUpperCase());
+              const formatted = normalizeAccountName(e.target.value);
+              setBankAccountName(formatted);
               setHasFormChanges(true);
             }}
-            hint="Tên viết hoa không dấu theo thẻ ngân hàng"
+            hint="Tên viết hoa không dấu theo tài khoản ngân hàng"
+            required
           />
 
           <div className="pt-2 flex justify-end">
@@ -197,11 +203,11 @@ export default function Profile() {
   // Link VietQR Demo nếu đã có đủ thông tin
   const initialQrUrl =
     currentUser?.bankBin && currentUser?.bankAccountNumber
-      ? `https://img.vietqr.io/image/${encodeURIComponent(currentUser.bankBin)}-${encodeURIComponent(
+      ? buildVietQRUrl(
+          currentUser.bankBin,
           currentUser.bankAccountNumber,
-        )}-compact2.png?amount=50000&addInfo=Demo%20Hom%20Nay%20An%20Gi&accountName=${encodeURIComponent(
-          currentUser.bankAccountName || 'NGUOI NHAN',
-        )}`
+          currentUser.bankAccountName || currentUser.username,
+        )
       : null;
   const [previewQrUrl, setPreviewQrUrl] = useState<string | null>(initialQrUrl);
 
@@ -282,6 +288,8 @@ export default function Profile() {
   const myTagIdSet = new Set(myTags.map((mt) => mt.tag.id));
   const availableSystemTags = systemTags.filter((st) => !myTagIdSet.has(st.id));
 
+  const currentBank = getBankByBin(currentUser?.bankBin);
+
   return (
     <PageContainer maxWidth="lg" className="py-6 space-y-6">
       <PageHeader
@@ -340,23 +348,19 @@ export default function Profile() {
 
           {/* Hộp xem trước mã QR VietQR nếu đã có thông tin */}
           {previewQrUrl && (
-            <Card className="p-5 bg-card/60 border-border/80 text-center">
-              <div className="flex items-center justify-center gap-2 mb-3 text-body-sm font-semibold text-primary">
-                <QrCode className="h-4 w-4" />
-                <span>Xem trước VietQR nhận tiền</span>
-              </div>
-              <div className="flex justify-center p-2 bg-white rounded-xl shadow-xs border border-border">
-                <img
-                  src={previewQrUrl}
-                  alt="VietQR Demo"
-                  className="max-h-48 w-auto object-contain rounded-lg"
-                  loading="lazy"
-                />
-              </div>
-              <p className="mt-2 text-caption text-foreground-muted">
+            <div className="space-y-2">
+              <QRCodeDisplay
+                qrSrc={previewQrUrl}
+                amount={50000}
+                receiverName={currentUser?.bankAccountName || currentUser?.username || 'Bạn'}
+                bankName={currentBank?.shortName || currentUser?.bankBin || 'Ngân hàng'}
+                accountNo={currentUser?.bankAccountNumber || undefined}
+                note="Demo Hom Nay An Gi"
+              />
+              <p className="text-center text-caption text-foreground-muted">
                 Mã QR chuẩn Napas247 sẽ tự động hiển thị cho bạn bè khi chia tiền hóa đơn.
               </p>
-            </Card>
+            </div>
           )}
         </Stack>
 

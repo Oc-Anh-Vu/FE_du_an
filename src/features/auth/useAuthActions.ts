@@ -42,7 +42,10 @@ export interface UseAuthActionsReturn {
   verifyEmailOtp: (payload: VerifyOtpRequest) => Promise<VerifyOtpResponse>;
   requestPasswordReset: (email: string) => Promise<string>;
   confirmPasswordReset: (payload: ResetPasswordRequest) => Promise<string>;
-  updateProfileAndBank: (userId: UUID, payload: UserUpdateRequest) => Promise<UserResponse | null>;
+  updateProfileAndBank: (
+    userIdOrPayload: UUID | UserUpdateRequest,
+    payload?: UserUpdateRequest,
+  ) => Promise<UserResponse | null>;
   managePersonalTag: (
     action: PersonalTagAction,
     tagId: UUID,
@@ -197,7 +200,7 @@ export function useAuthActions(): UseAuthActionsReturn {
     async (userId: UUID, payload: UserUpdateRequest): Promise<UserResponse | null> => {
       setIsForbiddenProfileUpdate(false);
       try {
-        const updated = await run(() => userService.updateUser(userId, payload));
+        const updated = await run(() => userService.updateMyInfo(payload));
         useUserStore.getState().setCurrentUser(updated);
         useUIStore.getState().showToast('success', 'Đã cập nhật hồ sơ thành công.');
         return updated;
