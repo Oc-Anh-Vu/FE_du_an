@@ -1,245 +1,267 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, CurrencyInput, SegmentedControl, Spinner } from "../../components/ui";
-import { normalizeApiError } from "../../services/apiClient";
-import { createExpense, getExpensesByRoom } from "../../services/expense.service";
-import { useBillingStore } from "../../store/billingStore";
-import { useUserStore } from "../../store/userStore";
-import { RoomStatus, SplitType, type ExpenseResponse, type RoomResponse, type UUID } from "../../types";
-import { formatVND } from "../../utils/currencyFormat";
+import { useMemo, useState, type FormEvent } from 'react';
+import { Calculator, DollarSign, Users } from 'lucide-react';
 import {
-  buildExpenseCreateRequest,
+  SplitType,
+  type ExpenseResponse,
+  type RoomResponse,
+  type UUID,
+} from '../../types';
+import { Card } from '../../components/ui/display/Card';
+import { Badge } from '../../components/ui/display/Badge';
+import { Button } from '../../components/ui/form/Button';
+import { CurrencyInput } from '../../components/ui/form/CurrencyInput';
+import { SegmentedControl } from '../../components/ui/form/SegmentedControl';
+import { Alert } from '../../components/ui/feedback/Alert';
+import { formatVND } from '../../utils/currencyFormat';
+import {
   getExpenseAmountDifference,
   getSplitTotal,
   type MemberAmounts,
-} from "./billingHelpers";
+} from './billingHelpers';
 
 export interface ExpenseSplitCreatorProps {
   room: RoomResponse;
-  existingExpenses?: ExpenseResponse[];
-  onCreated?: (expense: ExpenseResponse) => void;
+  currentUserId?: UUID;
+  isSubmitting?: boolean;
+  error?: string | null;
+  onCreateExpense: (params: {
+    room: RoomResponse;
+    payerId: UUID;
+    totalAmount: number;
+    splitType: SplitType;
+    memberAmounts: MemberAmounts;
+  }) => Promise<ExpenseResponse | null | void>;
+  onCancel?: () => void;
 }
 
 export default function ExpenseSplitCreator({
   room,
-  existingExpenses,
-  onCreated,
+  currentUserId,
+  isSubmitting = false,
+  error = null,
+  onCreateExpense,
+  onCancel,
 }: ExpenseSplitCreatorProps) {
-  const currentUser = useUserStore((state) => state.currentUser);
-  const upsertRoomExpense = useBillingStore((state) => state.upsertRoomExpense);
   const members = useMemo(() => room.members ?? [], [room.members]);
-  const isMember = Boolean(currentUser && members.some((member) => member.id === currentUser.id));
+
+  const defaultPayerId = useMemo(() => {
+    if (currentUserId && members.some((m) => m.id === currentUserId)) {
+      return currentUserId;
+    }
+    return members[0]?.id ?? '';
+  }, [currentUserId, members]);
+
   const [splitType, setSplitType] = useState<SplitType>(SplitType.EVENLY);
+  const [payerId, setPayerId] = useState<UUID>(defaultPayerId);
   const [totalAmount, setTotalAmount] = useState<number | null>(null);
   const [memberAmounts, setMemberAmounts] = useState<MemberAmounts>({});
-  const [payerId, setPayerId] = useState<UUID>("");
-  const [createdExpense, setCreatedExpense] = useState(false);
-  const [checkedExpenses, setCheckedExpenses] = useState<{
-    roomId: UUID;
-    expenses: ExpenseResponse[];
-  } | null>(null);
-  const [checkError, setCheckError] = useState<{ roomId: UUID; message: string } | null>(null);
-  const [checkAttempt, setCheckAttempt] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (existingExpenses !== undefined) {
+  const splitTotal = useMemo(() => getSplitTotal(memberAmounts), [memberAmounts]);
+  const difference = getExpenseAmountDifference(totalAmount ?? 0, splitTotal);
+  const hasValidTotal = typeof totalAmount === 'number' && totalAmount > 0;
+  const isByItemBalanced = splitType === SplitType.EVENLY || (hasValidTotal && difference === 0 && splitTotal > 0);
+
+  const canSubmit = hasValidTotal && Boolean(payerId) && isByItemBalanced && !isSubmitting;
+
+  const evenAmountPerMember = useMemo(() => {
+    if (!hasValidTotal || members.length === 0) return 0;
+    return Math.round((totalAmount ?? 0) / members.length);
+  }, [hasValidTotal, members.length, totalAmount]);
+
+  function handleMemberAmountChange(memberId: UUID, amount: number | null) {
+    setMemberAmounts((prev) => ({
+      ...prev,
+      [memberId]: amount,
+    }));
+    setLocalError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLocalError(null);
+
+    if (!hasValidTotal) {
+      setLocalError('Vui lòng nhập tổng tiền hóa đơn hợp lệ (lớn hơn 0đ).');
       return;
     }
 
-    let active = true;
-    getExpensesByRoom(room.id)
-      .then((expenses) => {
-        if (active) setCheckedExpenses({ roomId: room.id, expenses });
-      })
-      .catch((requestError: unknown) => {
-        if (active) setCheckError({ roomId: room.id, message: normalizeApiError(requestError).message });
-      });
+    if (!payerId) {
+      setLocalError('Vui lòng chọn người đứng ra thanh toán trước hóa đơn.');
+      return;
+    }
 
-    return () => {
-      active = false;
-    };
-  }, [checkAttempt, existingExpenses, room.id]);
+    if (splitType === SplitType.BY_ITEM && difference !== 0) {
+      setLocalError(
+        `Tổng tiền các thành viên (${formatVND(splitTotal)}đ) chưa khớp với tổng hóa đơn (${formatVND(totalAmount ?? 0)}đ).`,
+      );
+      return;
+    }
 
-  const activeCheckError = checkError?.roomId === room.id ? checkError.message : null;
-  const checkingExisting =
-    existingExpenses === undefined &&
-    checkedExpenses?.roomId !== room.id &&
-    activeCheckError === null;
-  const hasExistingExpense =
-    createdExpense ||
-    (existingExpenses !== undefined
-      ? existingExpenses.length > 0
-      : checkedExpenses?.roomId === room.id && checkedExpenses.expenses.length > 0);
-  const selectedPayerId = members.some((member) => member.id === payerId)
-    ? payerId
-    : (members.find((member) => member.id === currentUser?.id) ?? members[0])?.id ?? "";
-  const splitTotal = useMemo(() => getSplitTotal(memberAmounts), [memberAmounts]);
-  const difference = getExpenseAmountDifference(totalAmount ?? 0, splitTotal);
-  const validTotal = typeof totalAmount === "number" && totalAmount > 0;
-  const byItemMatches = splitType === SplitType.EVENLY || (validTotal && difference === 0 && splitTotal > 0);
-  const canSubmit =
-    room.status === RoomStatus.CLOSED &&
-    isMember &&
-    !hasExistingExpense &&
-    !checkingExisting &&
-    !checkError &&
-    !submitting &&
-    validTotal &&
-    Boolean(selectedPayerId) &&
-    byItemMatches;
-
-  if (room.status !== RoomStatus.CLOSED || !isMember) return null;
-
-  if (checkingExisting) {
-    return (
-      <div className="flex items-center gap-3 py-4" aria-live="polite">
-        <Spinner size="sm" />
-        <span className="text-body-sm text-muted-foreground">Đang kiểm tra hóa đơn phòng...</span>
-      </div>
-    );
-  }
-
-  if (activeCheckError) {
-    return (
-      <Alert
-        variant="danger"
-        title="Không thể kiểm tra hóa đơn phòng"
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCheckError(null);
-              setCheckedExpenses(null);
-              setCheckAttempt((attempt) => attempt + 1);
-            }}
-          >
-            Thử lại
-          </Button>
-        }
-      >
-        {activeCheckError}
-      </Alert>
-    );
-  }
-
-  if (hasExistingExpense) {
-    return (
-      <Alert variant="info" title="Phòng đã có hóa đơn">
-        Mỗi phòng chỉ có thể có một hóa đơn. Hãy xem hóa đơn hiện có bên dưới.
-      </Alert>
-    );
-  }
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
     try {
-      const payload = buildExpenseCreateRequest({
+      await onCreateExpense({
         room,
-        payerId: selectedPayerId,
-        splitType,
+        payerId,
         totalAmount: totalAmount ?? 0,
+        splitType,
         memberAmounts,
       });
-      setSubmitting(true);
-      const created = await createExpense(payload);
-      upsertRoomExpense(created);
-      setCreatedExpense(true);
-      onCreated?.(created);
-    } catch (requestError) {
-      setError(normalizeApiError(requestError).message);
-    } finally {
-      setSubmitting(false);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Không thể tạo hóa đơn chia tiền.');
     }
-  };
+  }
+
+  const displayError = error || localError;
 
   return (
-    <Card title="Tạo hóa đơn" description="Chỉ tạo một hóa đơn cho phòng đã đóng.">
-      <form className="space-y-5" onSubmit={(event) => void handleSubmit(event)}>
-        {error && <Alert variant="danger" title="Không thể tạo hóa đơn">{error}</Alert>}
-        <fieldset disabled={submitting} className="space-y-5 disabled:opacity-70">
-          <div className="space-y-2">
-            <span className="text-body-sm font-semibold">Cách chia tiền</span>
-            <SegmentedControl
-              aria-label="Chọn cách chia hóa đơn"
-              value={splitType}
-              onValueChange={(value) => setSplitType(value as SplitType)}
-              options={[
-                { label: "Chia đều", value: SplitType.EVENLY },
-                { label: "Theo thành viên", value: SplitType.BY_ITEM },
-              ]}
-            />
-          </div>
+    <Card
+      as="section"
+      title="Tạo hóa đơn chia tiền"
+      description="Chia đều cho cả nhóm hoặc nhập số tiền cụ thể của từng người"
+      className="mx-auto w-full max-w-xl rounded-card border border-border bg-card p-6 shadow-card"
+    >
+      <form className="space-y-6" onSubmit={(event) => void handleSubmit(event)} noValidate>
+        {displayError && (
+          <Alert variant="danger" title="Không thể tạo hóa đơn">
+            {displayError}
+          </Alert>
+        )}
 
-          <label className="block space-y-2 text-body-sm font-semibold" htmlFor="billing-payer">
-            Người trả hóa đơn
-            <select
-              id="billing-payer"
-              className="min-h-11 w-full rounded-control border border-border bg-card px-3 text-body-sm text-foreground focus-ring"
-              value={selectedPayerId}
-              onChange={(event) => setPayerId(event.currentTarget.value)}
-              required
-            >
-              <option value="" disabled>Chọn thành viên</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>{member.username}</option>
-              ))}
-            </select>
+        {/* Chế độ chia tiền */}
+        <div className="space-y-2">
+          <label className="text-body-sm font-semibold text-foreground">
+            Chế độ chia tiền
           </label>
+          <SegmentedControl
+            aria-label="Chế độ chia tiền"
+            value={splitType}
+            onValueChange={(val: string) => setSplitType(val as SplitType)}
+            options={[
+              { value: SplitType.EVENLY, label: 'Chia đều cho tất cả' },
+              { value: SplitType.BY_ITEM, label: 'Chia theo từng người' },
+            ]}
+          />
+        </div>
 
+        {/* Người thanh toán trước */}
+        <div className="space-y-2">
+          <label htmlFor="payer-select" className="text-body-sm font-semibold text-foreground">
+            Người đã thanh toán trước (Chủ nợ)
+          </label>
+          <select
+            id="payer-select"
+            value={payerId}
+            onChange={(e) => setPayerId(e.target.value)}
+            disabled={isSubmitting}
+            className="focus-ring h-11 w-full rounded-control border border-border bg-card px-3 text-body-sm font-semibold text-foreground transition-colors hover:border-primary/50"
+          >
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.username} {member.id === currentUserId ? '(Bạn)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tổng tiền hóa đơn */}
+        <div className="space-y-2">
           <CurrencyInput
-            label="Tổng hóa đơn"
+            label="Tổng tiền hóa đơn chung"
+            placeholder="Ví dụ: 300.000"
             value={totalAmount}
             onValueChange={setTotalAmount}
-            placeholder="Nhập tổng tiền"
-            min={1}
-            required
+            disabled={isSubmitting}
           />
+        </div>
 
-          {splitType === SplitType.EVENLY ? (
-            <p className="rounded-control bg-muted p-3 text-body-sm" aria-live="polite">
-              Ước tính mỗi thành viên:{" "}
-              <strong>{formatVND(members.length > 0 ? Math.round((totalAmount ?? 0) / members.length) : 0)}đ</strong>
-              {members.length === 0 && " (phòng chưa có thành viên)"}
-            </p>
-          ) : (
-            <fieldset className="space-y-3">
-              <legend className="text-body-sm font-semibold">Số tiền của từng thành viên</legend>
+        {/* Chi tiết chế độ EVENLY */}
+        {splitType === SplitType.EVENLY && hasValidTotal && (
+          <div className="flex items-center justify-between rounded-card border border-border bg-muted/40 p-4 text-body-sm">
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Users size={16} className="text-primary" />
+              <span>Mỗi người ({members.length} thành viên):</span>
+            </span>
+            <strong className="text-heading-sm tabular-nums text-primary-strong">
+              {formatVND(evenAmountPerMember)}đ
+            </strong>
+          </div>
+        )}
+
+        {/* Chi tiết chế độ BY_ITEM */}
+        {splitType === SplitType.BY_ITEM && (
+          <div className="space-y-4 rounded-card border border-border bg-muted/30 p-4">
+            <div className="flex items-center justify-between">
+              <h4 className="flex items-center gap-1.5 text-body-sm font-bold text-foreground">
+                <Calculator size={16} className="text-primary" />
+                <span>Số tiền từng thành viên</span>
+              </h4>
+
+              {hasValidTotal && (
+                <div aria-live="polite">
+                  {difference === 0 && splitTotal > 0 ? (
+                    <Badge variant="success" size="sm">
+                      Khớp 100% tổng tiền
+                    </Badge>
+                  ) : difference > 0 ? (
+                    <Badge variant="warning" size="sm">
+                      Thiếu {formatVND(difference)}đ
+                    </Badge>
+                  ) : (
+                    <Badge variant="danger" size="sm">
+                      Dư {formatVND(Math.abs(difference))}đ
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
               {members.map((member) => (
-                <CurrencyInput
+                <div
                   key={member.id}
-                  label={member.username}
-                  value={memberAmounts[member.id] ?? null}
-                  onValueChange={(amount) =>
-                    setMemberAmounts((current) => ({ ...current, [member.id]: amount }))
-                  }
-                  placeholder="Để trống nếu không có phần"
-                  min={0}
-                />
-              ))}
-              <div
-                className="rounded-control bg-muted p-3 text-body-sm"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                Tổng đã chia: <strong>{formatVND(splitTotal)}đ</strong>
-                {validTotal && difference !== 0 && (
-                  <span className="ml-2 text-danger-soft-foreground">
-                    {difference > 0
-                      ? `Còn thiếu ${formatVND(difference)}đ`
-                      : `Đang vượt ${formatVND(Math.abs(difference))}đ`}
+                  className="flex items-center justify-between gap-3 rounded-card border border-border bg-card p-2.5"
+                >
+                  <span className="truncate text-body-sm font-semibold text-foreground">
+                    {member.username} {member.id === currentUserId ? '(Bạn)' : ''}
                   </span>
-                )}
-              </div>
-            </fieldset>
+                  <div className="w-40">
+                    <CurrencyInput
+                      placeholder="0"
+                      value={memberAmounts[member.id] ?? null}
+                      onValueChange={(val) => handleMemberAmountChange(member.id, val)}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Nút hành động */}
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          {onCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={onCancel}
+            >
+              Hủy
+            </Button>
           )}
 
-          <Button type="submit" loading={submitting} disabled={!canSubmit} fullWidth>
-            Tạo hóa đơn
+          <Button
+            type="submit"
+            variant="primary"
+            leftIcon={<DollarSign aria-hidden="true" size={18} />}
+            loading={isSubmitting}
+            loadingText="Đang tạo hóa đơn..."
+            disabled={!canSubmit}
+          >
+            Tạo hóa đơn chia tiền
           </Button>
-        </fieldset>
+        </div>
       </form>
     </Card>
   );

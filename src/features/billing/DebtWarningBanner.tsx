@@ -1,113 +1,69 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, EmptyState, Spinner } from "../../components/ui";
-import { normalizeApiError } from "../../services/apiClient";
-import { getMyDebts } from "../../services/expense.service";
-import { useBillingStore } from "../../store/billingStore";
-import { formatVND } from "../../utils/currencyFormat";
-import VietQRPaymentCard from "./VietQRPaymentCard";
+import { ArrowRight, RefreshCw, Wallet } from 'lucide-react';
+import type { ExpenseSplitResponse } from '../../types';
+import { Alert } from '../../components/ui/feedback/Alert';
+import { Button } from '../../components/ui/form/Button';
+import { formatVND } from '../../utils/currencyFormat';
 
 export interface DebtWarningBannerProps {
+  debts?: ExpenseSplitResponse[];
   compact?: boolean;
+  onViewDebtsClick?: () => void;
+  onRefresh?: () => Promise<void> | void;
 }
 
-export default function DebtWarningBanner({ compact = false }: DebtWarningBannerProps) {
-  const debts = useBillingStore((state) => state.myDebts);
-  const setMyDebts = useBillingStore((state) => state.setMyDebts);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadDebts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await getMyDebts();
-      setMyDebts(result);
-    } catch (requestError) {
-      setError(normalizeApiError(requestError).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [setMyDebts]);
-
-  useEffect(() => {
-    let active = true;
-    getMyDebts()
-      .then((result) => {
-        if (active) setMyDebts(result);
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(normalizeApiError(requestError).message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [setMyDebts]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-3 py-4" aria-live="polite">
-        <Spinner size="sm" />
-        <span className="text-body-sm text-muted-foreground">Đang tải các khoản nợ...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert
-        variant="danger"
-        title="Không tải được các khoản nợ"
-        action={<Button variant="outline" size="sm" onClick={() => void loadDebts()}>Thử lại</Button>}
-      >
-        {error}
-      </Alert>
-    );
-  }
-
+export default function DebtWarningBanner({
+  debts = [],
+  compact = false,
+  onViewDebtsClick,
+  onRefresh,
+}: DebtWarningBannerProps) {
   const unpaidDebts = debts.filter((debt) => !debt.paid);
+
   if (unpaidDebts.length === 0) {
-    return (
-      <EmptyState
-        size={compact ? "sm" : "md"}
-        title="Bạn không có khoản nợ chưa thanh toán"
-        description="Danh sách này chỉ bao gồm các khoản chưa thanh toán được trả về từ máy chủ."
-      />
-    );
+    return null;
   }
 
-  const totalOwed = unpaidDebts.reduce((total, debt) => total + debt.amountOwed, 0);
+  const totalOwed = unpaidDebts.reduce((sum, debt) => sum + debt.amountOwed, 0);
 
   return (
-    <section aria-labelledby="personal-debts-title" className="space-y-5">
+    <div className="w-full">
       <Alert
         variant="warning"
-        title="Khoản cần thanh toán"
-        action={<Button variant="outline" size="sm" onClick={() => void loadDebts()}>Tải lại khoản nợ</Button>}
+        title="Bạn có khoản tiền cần thanh toán"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<RefreshCw aria-hidden="true" size={14} />}
+                onClick={() => void onRefresh()}
+              >
+                Làm mới
+              </Button>
+            )}
+            {onViewDebtsClick && (
+              <Button
+                variant="primary"
+                size="sm"
+                rightIcon={<ArrowRight aria-hidden="true" size={14} />}
+                onClick={onViewDebtsClick}
+              >
+                Thanh toán ngay
+              </Button>
+            )}
+          </div>
+        }
       >
-        Bạn có {unpaidDebts.length} khoản chưa thanh toán, tổng cộng{" "}
-        <strong className="tabular-nums">{formatVND(totalOwed)}đ</strong>.
-        {!compact && (
-          <> Đây không phải lịch sử các khoản đã thanh toán.</>
-        )}
+        <div className="flex items-center gap-2">
+          <Wallet size={16} className="shrink-0 text-warning-soft-foreground" />
+          <span>
+            Bạn đang có <strong>{unpaidDebts.length}</strong> khoản chưa thanh toán, tổng cộng{' '}
+            <strong className="tabular-nums text-foreground">{formatVND(totalOwed)}đ</strong>.
+            {!compact && ' Vui lòng mở mã VietQR để chuyển khoản cho chủ nợ sớm nhé.'}
+          </span>
+        </div>
       </Alert>
-      <h2 id="personal-debts-title" className="text-heading-sm font-bold">
-        Khoản nợ chưa thanh toán
-      </h2>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {unpaidDebts.map((debt) => (
-          <article key={`${debt.expenseId}-${debt.user.id}`} className="space-y-3 rounded-card border border-border bg-card p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-semibold">Người nhận: {debt.payer?.username ?? "Chưa rõ"}</h3>
-              <p className="text-body-sm text-muted-foreground">Mã hóa đơn: {debt.expenseId}</p>
-            </div>
-            <VietQRPaymentCard split={debt} />
-          </article>
-        ))}
-      </div>
-    </section>
+    </div>
   );
 }
