@@ -33,7 +33,7 @@ export function PlaceCatalogView({
   actions: customActions,
   className,
 }: PlaceCatalogViewProps) {
-  const defaultActions = usePlaceActions();
+  const defaultActions = usePlaceActions(undefined, { autoFetch: !customActions });
   const actions = customActions ?? defaultActions;
 
   const { coordinates, hasCoordinates, isRequesting, requestLocation } = useGeolocation();

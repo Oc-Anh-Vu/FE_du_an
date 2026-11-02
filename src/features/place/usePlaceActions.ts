@@ -66,13 +66,27 @@ const INITIAL_FILTERS: PlaceFilterState = {
   radiusKm: 5.0,
 };
 
-export function usePlaceActions(initialFilters?: Partial<PlaceFilterState>): UsePlaceActionsReturn {
+export interface UsePlaceActionsOptions {
+  autoFetch?: boolean;
+}
+
+export function usePlaceActions(
+  initialFilters?: Partial<PlaceFilterState>,
+  options?: UsePlaceActionsOptions,
+): UsePlaceActionsReturn {
+  const autoFetch = options?.autoFetch ?? true;
   const { coordinates, hasCoordinates } = useGeolocation();
 
   const [filters, setFilters] = useState<PlaceFilterState>(() => ({
     ...INITIAL_FILTERS,
     ...initialFilters,
   }));
+
+  const filtersRef = useRef(filters);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   const debouncedSearchName = useDebounce(filters.searchName, 300);
 
@@ -110,7 +124,7 @@ export function usePlaceActions(initialFilters?: Partial<PlaceFilterState>): Use
   const fetchPlaces = useCallback(
     async (overrideFilters?: Partial<PlaceFilterState>): Promise<PlaceResponse[]> => {
       const activeFilters = {
-        ...filters,
+        ...filtersRef.current,
         ...overrideFilters,
       };
 
@@ -168,11 +182,13 @@ export function usePlaceActions(initialFilters?: Partial<PlaceFilterState>): Use
         return [];
       }
     },
-    [coordinates, filters, hasCoordinates],
+    [coordinates, hasCoordinates],
   );
 
   // Tự động tải lại dữ liệu khi debouncedSearchName, selectedCategory, useGpsFilter, radiusKm hoặc coordinates thay đổi
   useEffect(() => {
+    if (!autoFetch) return;
+
     let isSubscribed = true;
     const timerId = window.setTimeout(() => {
       if (isSubscribed) {
@@ -184,7 +200,7 @@ export function usePlaceActions(initialFilters?: Partial<PlaceFilterState>): Use
       isSubscribed = false;
       window.clearTimeout(timerId);
     };
-  }, [debouncedSearchName, fetchPlaces, filters.radiusKm, filters.selectedCategory, filters.useGpsFilter]);
+  }, [autoFetch, coordinates, debouncedSearchName, fetchPlaces, filters.radiusKm, filters.selectedCategory, filters.useGpsFilter, hasCoordinates]);
 
   // Actions cho Solo Mode
   const skipSoloPlace = useCallback(() => {
