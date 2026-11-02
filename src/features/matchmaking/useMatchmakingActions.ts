@@ -91,13 +91,28 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     setError(null);
 
     try {
-      // Lưu từng tag tạm thời (temporary = true)
+      // 1. Dọn dẹp các tag tạm thời cũ không còn nằm trong danh sách chọn
+      const currentMyTags = useUserStore.getState().myTags;
+      const oldTemporaryTags = currentMyTags.filter(
+        (ut) => ut.temporary && !selectedTagIds.includes(ut.tag.id),
+      );
+
+      for (const oldTag of oldTemporaryTags) {
+        try {
+          await tagService.removeUserTag(oldTag.tag.id);
+          useUserStore.getState().removeMyTag(oldTag.tag.id);
+        } catch {
+          // Bỏ qua nếu tag đã được dọn trước đó
+        }
+      }
+
+      // 2. Lưu từng tag tạm thời (temporary = true)
       for (const tagId of selectedTagIds) {
         const savedUserTag = await tagService.addUserTag(tagId, true);
         useUserStore.getState().upsertMyTag(savedUserTag);
       }
 
-      // Đồng bộ lại toàn bộ tags người dùng
+      // 3. Đồng bộ lại toàn bộ tags người dùng
       try {
         const refreshedUserTags = await tagService.getUserTags();
         useUserStore.getState().setMyTags(refreshedUserTags);
