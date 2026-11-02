@@ -79,7 +79,7 @@ export default function Dashboard() {
       <section aria-label="Hành động nhanh" className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">
         <Link
           to="/app/explore?mode=swipe"
-          className="group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-primary/50 hover:shadow-card md:p-5"
+          className="focus-ring group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-primary/50 hover:shadow-card md:p-5"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Utensils size={20} aria-hidden="true" />
@@ -96,7 +96,7 @@ export default function Dashboard() {
 
         <Link
           to="/app/room/new"
-          className="group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-secondary-foreground/50 hover:shadow-card md:p-5"
+          className="focus-ring group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-secondary-foreground/50 hover:shadow-card md:p-5"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
             <PlusCircle size={20} aria-hidden="true" />
@@ -113,7 +113,7 @@ export default function Dashboard() {
 
         <Link
           to="/app/room/join"
-          className="group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-success/50 hover:shadow-card md:p-5"
+          className="focus-ring group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-success/50 hover:shadow-card md:p-5"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-success-soft text-success">
             <LogIn size={20} aria-hidden="true" />
@@ -130,7 +130,7 @@ export default function Dashboard() {
 
         <Link
           to="/app/room/match"
-          className="group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-warning/50 hover:shadow-card md:p-5"
+          className="focus-ring group flex flex-col justify-between rounded-card border border-border bg-card p-4 transition-all hover:scale-[1.02] hover:border-warning/50 hover:shadow-card md:p-5"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-warning-soft text-warning">
             <Radio size={20} aria-hidden="true" />

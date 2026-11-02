@@ -1,7 +1,7 @@
 // Màn hình Thiết lập Ghép hội Radar ngẫu nhiên
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Radio, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, Radio, Sparkles } from 'lucide-react';
 import { useMatchmakingActions } from '../../../features/matchmaking/useMatchmakingActions';
 import { useGeolocation } from '../../../hooks/useGeolocation';
 import { useUIStore } from '../../../store/uiStore';
@@ -142,16 +142,14 @@ export default function Match() {
 
             {/* Slider Bán kính quét */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center text-body-sm font-semibold text-foreground">
-                <span>Bán kính tìm kiếm</span>
-                <span className="text-primary font-bold">{radius} km</span>
-              </div>
               <Slider
+                label="Bán kính tìm kiếm"
                 min={1}
                 max={20}
                 step={1}
                 value={radius}
                 onValueChange={(val) => setRadius(val)}
+                formatValue={(val) => `${val} km`}
                 aria-label="Bán kính tìm kiếm quán ăn xung quanh"
               />
               <p className="text-caption text-foreground-muted">
@@ -161,18 +159,14 @@ export default function Match() {
 
             {/* Slider Quy mô nhóm */}
             <div className="space-y-2 pt-2 border-t border-border">
-              <div className="flex justify-between items-center text-body-sm font-semibold text-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Users className="h-4 w-4" /> Số người mỗi nhóm
-                </span>
-                <span className="text-primary font-bold">{targetGroupSize} người</span>
-              </div>
               <Slider
+                label="Số người mỗi nhóm"
                 min={2}
                 max={10}
                 step={1}
                 value={targetGroupSize}
                 onValueChange={(val) => setTargetGroupSize(val)}
+                formatValue={(val) => `${val} người`}
                 aria-label="Số lượng người mong muốn trong nhóm"
               />
               <p className="text-caption text-foreground-muted">
