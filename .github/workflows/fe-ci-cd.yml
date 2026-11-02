@@ -37,5 +37,6 @@ jobs:
       - name: Cập nhật Frontend Container trên máy ảo
         run: |
           cd /home/dungnb/project_HNAJ
+          git pull origin main
           docker compose pull frontend
           docker compose up -d --force-recreate frontend
