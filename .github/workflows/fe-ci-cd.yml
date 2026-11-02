@@ -28,15 +28,14 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hnaj-frontend:latest
 
-  # 🌟 BỔ SUNG JOB TỰ ĐỘNG DEPLOY TRÊN MÁY ẢO UBUNTU
-deploy:
-  needs: build-and-push-fe
-  runs-on: self-hosted
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  deploy:
+    needs: build-and-push-fe
+    runs-on: self-hosted
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-  steps:
-    - name: Cập nhật Frontend Container trên máy ảo
-      run: |
-        cd /home/dungnb/project_HNAJ
-        docker compose pull frontend
-        docker compose up -d --force-recreate frontend
+    steps:
+      - name: Cập nhật Frontend Container trên máy ảo
+        run: |
+          cd /home/dungnb/project_HNAJ
+          docker compose pull frontend
+          docker compose up -d --force-recreate frontend
