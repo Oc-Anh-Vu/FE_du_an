@@ -16,9 +16,19 @@ import {
   UsersRound,
   WalletCards,
 } from "lucide-react"
-import { MainLayout, type NavItemConfig } from "./components/layout"
-import AdminRouteGuard from "./components/layout/AdminRouteGuard"
-import { PublicLayout } from "./components/layout"
+import { MainLayout, type NavItemConfig, PublicLayout } from "./components/layout"
+import { Toast } from "./components/ui/feedback/Toast"
+import {
+  AdminRoute,
+  GuestOnlyRoute,
+  ProtectedRoute,
+  SessionBootstrap,
+} from "./features/auth"
+import InvitePopup from "./features/social/InvitePopup"
+import { resetSessionAndStores, useUserStore } from "./store/userStore"
+import { useUIStore } from "./store/uiStore"
+
+// Pages
 import Home from "./pages/Home"
 import NotFound from "./pages/NotFound"
 import Login from "./pages/auth/Login"
@@ -63,6 +73,10 @@ function WorkspaceLayout({ kind }: { kind: "user" | "admin" }) {
   const { pathname } = useLocation()
   const isAdmin = kind === "admin"
   const navItems = isAdmin ? adminNavItems : userNavItems
+  const currentUser = useUserStore((state) => state.currentUser)
+  const userRoles = currentUser?.roles ?? []
+  const hasAdminRole = userRoles.includes("ADMIN") || userRoles.includes("ROLE_ADMIN")
+
   const activeKey = isAdmin
     ? pathname.startsWith("/admin/users")
       ? "users"
@@ -96,10 +110,21 @@ function WorkspaceLayout({ kind }: { kind: "user" | "admin" }) {
   return (
     <MainLayout
       brandName={isAdmin ? "HNAG Admin" : "Hôm nay ăn gì"}
+      brandHref={isAdmin ? "/admin" : "/app"}
       navItems={navItems}
       activeKey={activeKey}
       onBrandClick={() => navigate(isAdmin ? "/admin" : "/app")}
       onSelectNav={(key) => navigate(destinations[key] ?? (isAdmin ? "/admin" : "/app"))}
+      userProfile={{
+        name: currentUser?.username || (isAdmin ? "Quản trị viên" : "Người dùng"),
+        subtitle: hasAdminRole ? "Quản trị viên" : "Thành viên",
+        avatarUrl: currentUser?.avatarUrl ?? undefined,
+        onClick: () => navigate("/app/profile"),
+      }}
+      onLogout={() => {
+        void resetSessionAndStores()
+        navigate("/login", { replace: true })
+      }}
       sidebarPromo={
         <Link
           className="focus-ring block rounded-panel bg-surface-dark p-4 text-sm font-semibold text-surface-dark-foreground"
@@ -114,65 +139,103 @@ function WorkspaceLayout({ kind }: { kind: "user" | "admin" }) {
   )
 }
 
+function PublicRouteWrapper() {
+  const authStatus = useUserStore((state) => state.authStatus)
+  const isAuthenticated = authStatus === "AUTHENTICATED"
+
+  return (
+    <PublicLayout
+      isAuthenticated={isAuthenticated}
+      renderLink={(href, children, className) => (
+        <Link className={className} to={href}>
+          {children}
+        </Link>
+      )}
+    >
+      <Outlet />
+    </PublicLayout>
+  )
+}
+
+function AppToast() {
+  const toast = useUIStore((state) => state.toast)
+  const hideToast = useUIStore((state) => state.hideToast)
+
+  return (
+    <div className="fixed bottom-4 right-4 z-toast flex max-w-sm flex-col gap-2">
+      <Toast
+        isVisible={toast.isVisible}
+        type={toast.type}
+        message={toast.message}
+        onClose={hideToast}
+        duration={toast.duration}
+      />
+    </div>
+  )
+}
+
+function AppInvitePopup() {
+  const navigate = useNavigate()
+
+  return (
+    <InvitePopup
+      onAcceptInvite={(_roomId, roomCode) => {
+        navigate(`/app/room/join?code=${encodeURIComponent(roomCode)}`)
+      }}
+    />
+  )
+}
+
 function AppRoutes() {
   return (
     <Routes>
-      <Route
-        element={
-          <PublicLayout
-            renderLink={(href, children, className) => (
-              <Link className={className} to={href}>
-                {children}
-              </Link>
-            )}
-          >
-            <Outlet />
-          </PublicLayout>
-        }
-      >
+      {/* 1. Nhóm Route công khai (PublicLayout) */}
+      <Route element={<PublicRouteWrapper />}>
         <Route path="/" element={<Home />} />
         <Route path="*" element={<NotFound />} />
       </Route>
 
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/verify" element={<Verify />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
+      {/* 2. Nhóm Route xác thực (GuestOnlyRoute - chỉ dành cho khách chưa đăng nhập) */}
+      <Route element={<GuestOnlyRoute />}>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/verify" element={<Verify />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+      </Route>
 
-      <Route path="/app" element={<WorkspaceLayout kind="user" />}>
-        <Route index element={<Dashboard />} />
-        <Route path="explore" element={<Explore />} />
-        <Route path="friends" element={<Friends />} />
-        <Route path="billing" element={<Billing />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="room">
-          <Route index element={<RoomHome />} />
-          <Route path="new" element={<RoomNew />} />
-          <Route path="join" element={<Join />} />
-          <Route path="match" element={<Match />} />
-          <Route path="queue" element={<MatchmakingQueue />} />
-          <Route path=":id">
-            <Route index element={<Navigate replace to="lobby" />} />
-            <Route path="lobby" element={<Lobby />} />
-            <Route path="swipe" element={<Swipe />} />
-            <Route path="summary" element={<Summary />} />
+      {/* 3. Nhóm Route người dùng (ProtectedRoute - yêu cầu đăng nhập) */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/app" element={<WorkspaceLayout kind="user" />}>
+          <Route index element={<Dashboard />} />
+          <Route path="explore" element={<Explore />} />
+          <Route path="friends" element={<Friends />} />
+          <Route path="billing" element={<Billing />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="room">
+            <Route index element={<RoomHome />} />
+            <Route path="new" element={<RoomNew />} />
+            <Route path="join" element={<Join />} />
+            <Route path="match" element={<Match />} />
+            <Route path="queue" element={<MatchmakingQueue />} />
+            <Route path=":id">
+              <Route index element={<Navigate replace to="lobby" />} />
+              <Route path="lobby" element={<Lobby />} />
+              <Route path="swipe" element={<Swipe />} />
+              <Route path="summary" element={<Summary />} />
+            </Route>
           </Route>
         </Route>
       </Route>
 
-      <Route
-        path="/admin"
-        element={
-          <AdminRouteGuard>
-            <WorkspaceLayout kind="admin" />
-          </AdminRouteGuard>
-        }
-      >
-        <Route index element={<AdminDashboard />} />
-        <Route path="users" element={<UsersManagement />} />
-        <Route path="places" element={<PlacesManagement />} />
-        <Route path="tags" element={<TagsManagement />} />
+      {/* 4. Nhóm Route quản trị (AdminRoute - yêu cầu quyền ADMIN) */}
+      <Route element={<AdminRoute />}>
+        <Route path="/admin" element={<WorkspaceLayout kind="admin" />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UsersManagement />} />
+          <Route path="places" element={<PlacesManagement />} />
+          <Route path="tags" element={<TagsManagement />} />
+        </Route>
       </Route>
     </Routes>
   )
@@ -182,7 +245,11 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
-        <AppRoutes />
+        <SessionBootstrap>
+          <AppRoutes />
+          <AppToast />
+          <AppInvitePopup />
+        </SessionBootstrap>
       </BrowserRouter>
     </MotionConfig>
   )
