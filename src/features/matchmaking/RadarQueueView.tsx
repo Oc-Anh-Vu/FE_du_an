@@ -18,6 +18,7 @@ import type {
 import { Avatar } from '../../components/ui/display/Avatar';
 import { Badge } from '../../components/ui/display/Badge';
 import { Card } from '../../components/ui/display/Card';
+import { Alert } from '../../components/ui/feedback/Alert';
 import { EmptyState } from '../../components/ui/feedback/EmptyState';
 import { ProgressBar } from '../../components/ui/feedback/ProgressBar';
 import { Spinner } from '../../components/ui/feedback/Spinner';
@@ -27,6 +28,7 @@ import { cn } from '../../utils/cn';
 
 export interface RadarQueueViewProps {
   matchmakingStatus?: MatchmakingStatusResponse | null;
+  error?: string | null;
   selectedTags?: TagResponse[];
   publicRooms?: PublicRoomResponse[];
   isLoadingPublicRooms?: boolean;
@@ -35,12 +37,15 @@ export interface RadarQueueViewProps {
   onJoinPublicRoom?: (roomCode: string) => void | Promise<void>;
   onCreateRoomInstead?: () => void;
   onRefreshPublicRooms?: () => void | Promise<void>;
+  onStartMatchmaking?: () => void;
+  onRetry?: () => void;
   onMatched?: (roomCode: string, roomId?: string) => void;
   className?: string;
 }
 
 export default function RadarQueueView({
   matchmakingStatus = null,
+  error = null,
   selectedTags = [],
   publicRooms = [],
   isLoadingPublicRooms = false,
@@ -49,10 +54,16 @@ export default function RadarQueueView({
   onJoinPublicRoom,
   onCreateRoomInstead,
   onRefreshPublicRooms,
+  onStartMatchmaking,
+  onRetry,
   onMatched,
   className,
 }: RadarQueueViewProps) {
   const isMatched = matchmakingStatus?.status === 'MATCHED';
+  const isWaiting = matchmakingStatus?.status === 'WAITING';
+  const isTimeout = matchmakingStatus?.status === 'TIMEOUT';
+  const isNotInQueue = !matchmakingStatus || isTimeout;
+  const hasError = Boolean(error);
   const hasTriggeredMatchedRef = useRef(false);
 
   // Kích hoạt callback khi Backend báo MATCHED
@@ -63,94 +74,166 @@ export default function RadarQueueView({
     }
   }, [isMatched, matchmakingStatus, onMatched]);
 
-  const queueSize = matchmakingStatus?.currentQueueSize ?? 1;
-  const targetSize = matchmakingStatus?.targetGroupSize ?? 4;
-  const progressPercent = Math.min(100, Math.round((queueSize / targetSize) * 100));
+  const queueSize = matchmakingStatus?.currentQueueSize ?? 0;
+  const targetSize = matchmakingStatus?.targetGroupSize ?? 2;
+  const progressPercent = targetSize > 0 ? Math.min(100, Math.round((queueSize / targetSize) * 100)) : 0;
 
   return (
     <div className={cn('w-full space-y-6', className)}>
       {/* Header trạng thái */}
       <header className="flex items-center justify-between border-b border-border pb-4">
         <div className="flex items-center gap-2">
-          <Radio size={20} className={cn('text-primary', isMatched ? 'text-success' : 'animate-pulse')} />
+          <Radio
+            size={20}
+            className={cn(
+              'text-primary',
+              isMatched && 'text-success',
+              isWaiting && 'animate-pulse text-primary',
+              hasError && 'text-danger',
+              isNotInQueue && !hasError && 'text-muted-foreground',
+            )}
+          />
           <h2 className="text-heading-sm font-bold text-foreground">
             Radar Ghép Hội
           </h2>
         </div>
-        {isMatched ? (
+
+        {hasError ? (
+          <Badge variant="danger" dot size="sm">
+            Lỗi kết nối
+          </Badge>
+        ) : isMatched ? (
           <Badge variant="success" dot size="sm">
             Đã ghép thành công!
           </Badge>
-        ) : (
+        ) : isWaiting ? (
           <Badge variant="warning" dot size="sm">
             Đang quét Radar
+          </Badge>
+        ) : (
+          <Badge variant="default" size="sm">
+            Chưa vào hàng đợi
           </Badge>
         )}
       </header>
 
-      {/* Vùng Radar quét xung nhịp & Tiến trình thực tế */}
-      <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-card border border-border bg-card p-6 py-10 shadow-card">
-        {/* Vòng tròn Radar xung nhịp */}
-        <div className="relative flex size-44 items-center justify-center" aria-hidden="true">
-          {!isMatched && (
-            <>
-              <span className="absolute size-44 rounded-full bg-primary/10 animate-ping" />
-              <span className="absolute size-32 rounded-full border border-primary/30 animate-pulse" />
-              <span className="absolute size-20 rounded-full border border-primary/50" />
-            </>
-          )}
-          <div
-            className={cn(
-              'relative flex size-14 items-center justify-center rounded-full text-white shadow-lg transition-colors',
-              isMatched ? 'bg-success' : 'bg-primary',
-            )}
+      {/* Vùng Radar quét hoặc Trạng thái rỗng / Lỗi */}
+      {hasError ? (
+        <Card as="section" className="p-6">
+          <Alert
+            variant="danger"
+            title="Không thể kiểm tra hàng đợi ghép phòng"
+            action={
+              <div className="mt-3 flex flex-wrap gap-2">
+                {onRetry && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    leftIcon={<RefreshCw size={14} />}
+                    onClick={onRetry}
+                  >
+                    Thử lại
+                  </Button>
+                )}
+                {onStartMatchmaking && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<Radio size={14} />}
+                    onClick={onStartMatchmaking}
+                  >
+                    Về trang thiết lập Radar
+                  </Button>
+                )}
+              </div>
+            }
           >
-            {isMatched ? (
-              <CheckCircle2 size={28} className="animate-bounce" />
-            ) : (
-              <Radio size={26} className="animate-pulse" />
+            {error || 'Đã có lỗi xảy ra khi kiểm tra trạng thái hàng đợi. Vui lòng thử lại sau.'}
+          </Alert>
+        </Card>
+      ) : isNotInQueue ? (
+        <Card as="section" className="p-6">
+          <EmptyState
+            icon={<Radio size={36} className="text-muted-foreground" aria-hidden="true" />}
+            title="Bạn chưa ở trong hàng đợi ghép phòng"
+            description="Hãy bắt đầu quét Radar để tìm kiếm những người bạn ăn uống quanh bạn theo khoảng cách GPS và tâm trạng ẩm thực hôm nay."
+            action={
+              onStartMatchmaking ? (
+                <Button
+                  variant="primary"
+                  leftIcon={<Radio size={16} />}
+                  onClick={onStartMatchmaking}
+                >
+                  Bắt đầu quét Radar
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ) : (
+        <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-card border border-border bg-card p-6 py-10 shadow-card">
+          {/* Vòng tròn Radar xung nhịp */}
+          <div className="relative flex size-44 items-center justify-center" aria-hidden="true">
+            {!isMatched && (
+              <>
+                <span className="absolute size-44 rounded-full bg-primary/10 animate-ping" />
+                <span className="absolute size-32 rounded-full border border-primary/30 animate-pulse" />
+                <span className="absolute size-20 rounded-full border border-primary/50" />
+              </>
             )}
+            <div
+              className={cn(
+                'relative flex size-14 items-center justify-center rounded-full text-white shadow-lg transition-colors',
+                isMatched ? 'bg-success' : 'bg-primary',
+              )}
+            >
+              {isMatched ? (
+                <CheckCircle2 size={28} className="animate-bounce" />
+              ) : (
+                <Radio size={26} className="animate-pulse" />
+              )}
+            </div>
           </div>
+
+          {/* Thông báo tiến trình */}
+          <p className="mt-6 text-center text-body font-bold text-foreground">
+            {isMatched
+              ? 'Đã tìm thấy phòng ăn phù hợp! Đang chuyển hướng...'
+              : (matchmakingStatus?.message || 'Đang quét tìm người cùng khẩu vị xung quanh bạn...')}
+          </p>
+
+          <p className="mt-1 text-center text-body-sm text-muted-foreground">
+            {isMatched
+              ? `Mã phòng ghép: ${matchmakingStatus?.roomCode ?? ''}`
+              : 'Hệ thống tự động gom nhóm theo khoảng cách GPS và tâm trạng hôm nay.'}
+          </p>
+
+          {/* Thanh tiến trình số người trong hàng đợi */}
+          {!isMatched && queueSize > 0 && (
+            <div className="mt-6 w-full max-w-xs">
+              <ProgressBar
+                value={progressPercent}
+                label={`Đã sẵn sàng: ${queueSize}/${targetSize} người`}
+                showPercentage
+                tone="primary"
+                animated
+              />
+            </div>
+          )}
+
+          {/* Danh sách Tags tâm trạng đang dùng để quét */}
+          {selectedTags.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-caption text-muted-foreground">Tâm trạng tìm kiếm:</span>
+              {selectedTags.map((tag) => (
+                <Badge key={tag.id} variant="default" size="sm">
+                  #{tag.tagName}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
-
-        {/* Thông báo tiến trình */}
-        <p className="mt-6 text-center text-body font-bold text-foreground">
-          {isMatched
-            ? 'Đã tìm thấy phòng ăn phù hợp! Đang chuyển hướng...'
-            : 'Đang quét tìm người cùng khẩu vị xung quanh bạn...'}
-        </p>
-
-        <p className="mt-1 text-center text-body-sm text-muted-foreground">
-          {isMatched
-            ? `Mã phòng ghép: ${matchmakingStatus?.roomCode ?? ''}`
-            : 'Hệ thống tự động gom nhóm theo khoảng cách GPS và tâm trạng hôm nay.'}
-        </p>
-
-        {/* Thanh tiến trình số người trong hàng đợi */}
-        {!isMatched && (
-          <div className="mt-6 w-full max-w-xs">
-            <ProgressBar
-              value={progressPercent}
-              label={`Đã sẵn sàng: ${queueSize}/${targetSize} người`}
-              showPercentage
-              tone="primary"
-              animated
-            />
-          </div>
-        )}
-
-        {/* Danh sách Tags tâm trạng đang dùng để quét */}
-        {selectedTags.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-caption text-muted-foreground">Tâm trạng tìm kiếm:</span>
-            {selectedTags.map((tag) => (
-              <Badge key={tag.id} variant="default" size="sm">
-                #{tag.tagName}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Danh sách Phòng công khai quanh đây (PUBLIC) */}
       <Card
@@ -242,7 +325,7 @@ export default function RadarQueueView({
 
       {/* Footer hành động điều hướng */}
       <footer className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-        {onCancelQueue && (
+        {onCancelQueue && !isNotInQueue && (
           <Button
             variant="outline"
             leftIcon={<X aria-hidden="true" size={16} />}
@@ -250,6 +333,16 @@ export default function RadarQueueView({
             onClick={() => void onCancelQueue()}
           >
             Hủy tìm kiếm ghép phòng
+          </Button>
+        )}
+
+        {isNotInQueue && onStartMatchmaking && (
+          <Button
+            variant="outline"
+            leftIcon={<Radio aria-hidden="true" size={16} />}
+            onClick={onStartMatchmaking}
+          >
+            Thiết lập Radar ghép phòng
           </Button>
         )}
 

@@ -112,18 +112,20 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
   }, []);
 
   /** Chọn hoặc bỏ chọn một tag tâm trạng (tối đa 2 tag) */
-  const toggleMoodTag = useCallback((tagId: UUID) => {
-    setSelectedTagIds((prev) => {
-      if (prev.includes(tagId)) {
-        return prev.filter((id) => id !== tagId);
+  const toggleMoodTag = useCallback(
+    (tagId: UUID) => {
+      if (selectedTagIds.includes(tagId)) {
+        setSelectedTagIds((prev) => prev.filter((id) => id !== tagId));
+        return;
       }
-      if (prev.length >= MAX_MOOD_TAGS) {
+      if (selectedTagIds.length >= MAX_MOOD_TAGS) {
         useUIStore.getState().showToast('warning', `Bạn chỉ có thể chọn tối đa ${MAX_MOOD_TAGS} tâm trạng ẩm thực.`);
-        return prev;
+        return;
       }
-      return [...prev, tagId];
-    });
-  }, []);
+      setSelectedTagIds((prev) => [...prev, tagId]);
+    },
+    [selectedTagIds],
+  );
 
   /** Xóa toàn bộ lựa chọn */
   const clearSelection = useCallback(() => {
@@ -188,8 +190,11 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     try {
       const status = await matchmakingService.getMatchStatus();
       setMatchmakingStatus(status);
+      setError(null);
       return status;
-    } catch {
+    } catch (err) {
+      const message = getErrorMessage(err, 'Không thể kiểm tra trạng thái hàng đợi ghép phòng.');
+      setError(message);
       return null;
     } finally {
       isPollingInFlightRef.current = false;
