@@ -27,3 +27,21 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hnaj-frontend:latest
+
+  # 🌟 BỔ SUNG JOB TỰ ĐỘNG DEPLOY TRÊN MÁY ẢO UBUNTU
+  deploy:
+    needs: build-and-push-fe
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: SSH vào máy ảo Ubuntu để cập nhật Frontend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            cd /home/dungnb/project_HNAJ
+            docker compose pull frontend
+            docker compose up -d --force-recreate frontend
