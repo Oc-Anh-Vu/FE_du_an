@@ -301,7 +301,10 @@ export default function AdminPlaceManager({
       <Modal
         isOpen={isModalOpen}
         onClose={() => {
-          if (!isSaving) setIsModalOpen(false);
+          if (!isSaving) {
+            setIsModalOpen(false);
+            setMutationError(null);
+          }
         }}
         title={editingPlace ? `Chỉnh sửa: ${editingPlace.name}` : 'Thêm địa điểm ăn uống mới'}
         size="md"
@@ -310,11 +313,16 @@ export default function AdminPlaceManager({
             <Button
               variant="outline"
               disabled={isSaving}
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false);
+                setMutationError(null);
+              }}
             >
               Hủy
             </Button>
             <Button
+              type="submit"
+              form="admin-place-form"
               variant="primary"
               loading={isSaving}
               loadingText="Đang lưu..."

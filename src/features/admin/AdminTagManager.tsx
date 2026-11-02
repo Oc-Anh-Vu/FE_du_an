@@ -211,7 +211,10 @@ export default function AdminTagManager({
       <Modal
         isOpen={isModalOpen}
         onClose={() => {
-          if (!isSaving) setIsModalOpen(false);
+          if (!isSaving) {
+            setIsModalOpen(false);
+            setMutationError(null);
+          }
         }}
         title={editingTag ? `Chỉnh sửa Tag: #${editingTag.tagName}` : 'Thêm Tag hệ thống mới'}
         size="sm"
@@ -220,11 +223,16 @@ export default function AdminTagManager({
             <Button
               variant="outline"
               disabled={isSaving}
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false);
+                setMutationError(null);
+              }}
             >
               Hủy
             </Button>
             <Button
+              type="submit"
+              form="admin-tag-form"
               variant="primary"
               loading={isSaving}
               loadingText="Đang lưu..."

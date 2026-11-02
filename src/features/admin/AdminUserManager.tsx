@@ -285,7 +285,10 @@ export default function AdminUserManager({
       <Modal
         isOpen={editingUser !== null}
         onClose={() => {
-          if (!isSaving) setEditingUser(null);
+          if (!isSaving) {
+            setEditingUser(null);
+            setMutationError(null);
+          }
         }}
         title={`Chỉnh sửa tài khoản: ${editingUser?.username}`}
         size="md"
@@ -294,11 +297,16 @@ export default function AdminUserManager({
             <Button
               variant="outline"
               disabled={isSaving}
-              onClick={() => setEditingUser(null)}
+              onClick={() => {
+                setEditingUser(null);
+                setMutationError(null);
+              }}
             >
               Hủy
             </Button>
             <Button
+              type="submit"
+              form="admin-edit-user-form"
               variant="primary"
               loading={isSaving}
               loadingText="Đang lưu..."
