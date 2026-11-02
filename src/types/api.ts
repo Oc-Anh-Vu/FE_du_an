@@ -440,3 +440,59 @@ export interface PublicRoomResponse {
   maxMembers: number;
   createdAt: ISODateTimeString;
 }
+
+// --- 11. WebSocket / STOMP Realtime Events (`/topic/rooms/{roomId}` & `/topic/matchmaking/{userId}`) ---
+export const SocketEventType = {
+  MEMBER_JOINED: 'MEMBER_JOINED',
+  MEMBER_LEFT: 'MEMBER_LEFT',
+  GAME_STARTED: 'GAME_STARTED',
+  SWIPE_ACTION: 'SWIPE_ACTION',
+  MATCH_FOUND: 'MATCH_FOUND',
+  ROOM_CLOSED: 'ROOM_CLOSED',
+} as const;
+export type SocketEventType = (typeof SocketEventType)[keyof typeof SocketEventType];
+
+export interface SocketEvent<T = unknown> {
+  type: SocketEventType | string;
+  roomId: UUID;
+  timestamp: ISODateTimeString;
+  data: T;
+}
+
+export interface MemberJoinedSocketData {
+  user: UserResponse;
+  currentMembersCount: number;
+}
+
+export interface MemberLeftSocketData {
+  user: UserResponse;
+  currentMembersCount: number;
+  newHostId?: string;
+}
+
+export interface GameStartedSocketData {
+  message?: string;
+}
+
+export interface SwipeActionSocketData {
+  userId: string;
+  username: string;
+  direction: 'RIGHT' | 'LEFT';
+}
+
+export interface MatchFoundSocketData {
+  matchedPlace: PlaceResponse;
+  message?: string;
+}
+
+export interface RoomClosedSocketData {
+  message?: string;
+}
+
+export type RoomSocketEvent =
+  | SocketEvent<MemberJoinedSocketData>
+  | SocketEvent<MemberLeftSocketData>
+  | SocketEvent<GameStartedSocketData>
+  | SocketEvent<SwipeActionSocketData>
+  | SocketEvent<MatchFoundSocketData>
+  | SocketEvent<RoomClosedSocketData>;
