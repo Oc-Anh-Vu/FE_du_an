@@ -1,7 +1,7 @@
 # =========================================
-# Stage 1: Build với Node.js 18
+# Stage 1: Build với Node.js 20 (Thay cho Node 18)
 # =========================================
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -22,13 +22,8 @@ RUN npm run build
 # =========================================
 FROM nginx:alpine AS runtime
 
-# Xoá config mặc định của nginx
 RUN rm /etc/nginx/conf.d/default.conf
-
-# Copy nginx config tùy chỉnh
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy file build từ stage 1 vào thư mục serve của nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
