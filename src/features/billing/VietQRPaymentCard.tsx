@@ -4,6 +4,7 @@ import { QRCodeDisplay } from '../../components/ui/display/QRCodeDisplay';
 import { Alert } from '../../components/ui/feedback/Alert';
 import { Button } from '../../components/ui/form/Button';
 import { formatVND } from '../../utils/currencyFormat';
+import { getBankByBin } from '../../utils/vietqrBanks';
 
 export interface VietQRPaymentCardProps {
   split: ExpenseSplitResponse;
@@ -23,6 +24,8 @@ export default function VietQRPaymentCard({
   const receiverName = payer?.bankAccountName || payer?.username || 'Chủ nợ';
   const hasBankDetails = Boolean(payer?.bankAccountNumber);
   const qrCodeUrl = split.qrCodeUrl || undefined;
+  const bankInfo = getBankByBin(payer?.bankBin);
+  const bankDisplayName = bankInfo?.shortName || payer?.bankBin || undefined;
 
   return (
     <section aria-label={`Thông tin thanh toán cho ${split.user.username}`} className="w-full space-y-4">
@@ -31,7 +34,7 @@ export default function VietQRPaymentCard({
           qrSrc={qrCodeUrl}
           amount={split.amountOwed}
           receiverName={receiverName}
-          bankName={payer?.bankBin ?? undefined}
+          bankName={bankDisplayName}
           accountNo={payer?.bankAccountNumber ?? undefined}
         />
       ) : (
@@ -53,8 +56,10 @@ export default function VietQRPaymentCard({
             </div>
             {payer?.bankBin && (
               <div>
-                <dt className="text-caption text-muted-foreground">Mã ngân hàng (BIN)</dt>
-                <dd className="font-semibold text-foreground">{payer.bankBin}</dd>
+                <dt className="text-caption text-muted-foreground">Ngân hàng</dt>
+                <dd className="font-semibold text-foreground">
+                  {bankDisplayName} {bankInfo ? `(${payer.bankBin})` : ''}
+                </dd>
               </div>
             )}
             {payer?.bankAccountNumber && (

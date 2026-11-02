@@ -11,3 +11,4 @@ export * from "./Switch";
 export * from "./Slider";
 export * from "./SegmentedControl";
 export * from "./IconButton";
+export * from "./BankSelect";
