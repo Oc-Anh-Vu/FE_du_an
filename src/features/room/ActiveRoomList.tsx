@@ -1,4 +1,4 @@
-import { Plus, Users, Utensils } from 'lucide-react';
+import { Plus, Radio, Users, Utensils } from 'lucide-react';
 import type { RoomResponse } from '../../types';
 import { Card } from '../../components/ui/display/Card';
 import { Badge } from '../../components/ui/display/Badge';
@@ -12,9 +12,13 @@ export interface ActiveRoomListProps {
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  onRoomClick?: (room: RoomResponse) => void;
   onSelectRoom?: (room: RoomResponse) => void;
+  onCreateClick?: () => void;
   onCreateRoomClick?: () => void;
+  onJoinClick?: () => void;
   onJoinRoomClick?: () => void;
+  onMatchClick?: () => void;
 }
 
 const roomStatusMeta = {
@@ -42,10 +46,19 @@ export default function ActiveRoomList({
   isLoading = false,
   error = null,
   onRetry,
+  onRoomClick,
   onSelectRoom,
+  onCreateClick,
   onCreateRoomClick,
+  onJoinClick,
   onJoinRoomClick,
+  onMatchClick,
 }: ActiveRoomListProps) {
+  const handleRoomClick = onRoomClick || onSelectRoom;
+  const handleCreate = onCreateClick || onCreateRoomClick;
+  const handleJoin = onJoinClick || onJoinRoomClick;
+  const handleMatch = onMatchClick;
+
   return (
     <section aria-labelledby="active-rooms-title" className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
@@ -64,12 +77,22 @@ export default function ActiveRoomList({
               Làm mới
             </Button>
           )}
-          {onCreateRoomClick && (
+          {handleMatch && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Radio aria-hidden="true" size={16} />}
+              onClick={handleMatch}
+            >
+              Ghép hội Radar
+            </Button>
+          )}
+          {handleCreate && (
             <Button
               variant="primary"
               size="sm"
               leftIcon={<Plus aria-hidden="true" size={16} />}
-              onClick={onCreateRoomClick}
+              onClick={handleCreate}
             >
               Tạo phòng
             </Button>
@@ -103,14 +126,23 @@ export default function ActiveRoomList({
           description="Hãy tạo phòng ăn mới hoặc nhập mã phòng do bạn bè chia sẻ để cùng tìm món ngon."
           action={
             <div className="flex flex-wrap justify-center gap-3">
-              {onCreateRoomClick && (
-                <Button variant="primary" onClick={onCreateRoomClick}>
+              {handleCreate && (
+                <Button variant="primary" onClick={handleCreate}>
                   Tạo phòng mới
                 </Button>
               )}
-              {onJoinRoomClick && (
-                <Button variant="outline" onClick={onJoinRoomClick}>
+              {handleJoin && (
+                <Button variant="outline" onClick={handleJoin}>
                   Tham gia bằng mã
+                </Button>
+              )}
+              {handleMatch && (
+                <Button
+                  variant="secondary"
+                  leftIcon={<Radio aria-hidden="true" size={16} />}
+                  onClick={handleMatch}
+                >
+                  Ghép hội Radar
                 </Button>
               )}
             </div>
@@ -128,11 +160,11 @@ export default function ActiveRoomList({
                   role="button"
                   tabIndex={0}
                   className="focus-ring block h-full rounded-card cursor-pointer transition-all hover:scale-[1.01]"
-                  onClick={() => onSelectRoom?.(room)}
+                  onClick={() => handleRoomClick?.(room)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onSelectRoom?.(room);
+                      handleRoomClick?.(room);
                     }
                   }}
                   aria-label={`Mở phòng ăn ${room.name || room.roomCode}`}
