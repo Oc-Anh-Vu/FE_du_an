@@ -1,192 +1,269 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Search, Trash2 } from "lucide-react";
-import { Alert } from "../../components/ui/feedback/Alert";
-import { Modal } from "../../components/ui/feedback/Modal";
-import { Button } from "../../components/ui/form/Button";
-import { Input } from "../../components/ui/form/Input";
-import { Card } from "../../components/ui/display/Card";
-import { userService } from "../../services/user.service";
-import type { UserResponse, UserUpdateRequest } from "../../types";
-import {
-  AdminLoadError,
-  AdminLoading,
-  AdminMutationError,
-} from "./AdminCommon";
-import { formatAdminDate, getAdminErrorMessage } from "./adminUtils";
+import { useMemo, useState, type FormEvent } from 'react';
+import { Pencil, Shield, Trash2, User } from 'lucide-react';
+import type { UUID, UserResponse, UserUpdateRequest } from '../../types';
+import { SearchInput } from '../../components/ui/form/SearchInput';
+import { Button } from '../../components/ui/form/Button';
+import { Input } from '../../components/ui/form/Input';
+import { Badge } from '../../components/ui/display/Badge';
+import { Avatar } from '../../components/ui/display/Avatar';
+import { Modal } from '../../components/ui/feedback/Modal';
+import { Alert } from '../../components/ui/feedback/Alert';
+import { Spinner } from '../../components/ui/feedback/Spinner';
+import { EmptyState } from '../../components/ui/feedback/EmptyState';
 
-function isAdminAccount(user: UserResponse): boolean {
-  return user.roles.some((role) => {
-    const normalized = String(role).trim().toUpperCase();
-    return normalized === "ROLE_ADMIN" || normalized === "ADMIN";
+export interface AdminUserManagerProps {
+  users?: UserResponse[];
+  isLoading?: boolean;
+  error?: string | null;
+  onUpdateUser?: (userId: UUID, payload: UserUpdateRequest) => Promise<UserResponse | null | void>;
+  onDeleteUser?: (userId: UUID) => Promise<boolean | void>;
+  onRefresh?: () => Promise<void> | void;
+}
+
+function isAdmin(user: UserResponse): boolean {
+  return (user.roles ?? []).some((role) => {
+    const norm = String(role).trim().toUpperCase();
+    return norm === 'ROLE_ADMIN' || norm === 'ADMIN';
   });
 }
 
-export default function AdminUserManager() {
-  const [users, setUsers] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+function formatDate(dateString: string): string {
+  try {
+    const d = new Date(dateString);
+    return new Intl.DateTimeFormat('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return dateString;
+  }
+}
+
+export default function AdminUserManager({
+  users = [],
+  isLoading = false,
+  error = null,
+  onUpdateUser,
+  onDeleteUser,
+  onRefresh,
+}: AdminUserManagerProps) {
+  const [query, setQuery] = useState('');
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserResponse | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const loadUsers = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      setUsers(await userService.getUsers());
-    } catch (error) {
-      setLoadError(getAdminErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    userService.getUsers().then((result) => {
-      if (active) setUsers(result);
-    }).catch((error: unknown) => {
-      if (active) setLoadError(getAdminErrorMessage(error));
-    }).finally(() => {
-      if (active) setIsLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Form states cho Modal chỉnh sửa
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
+  const [editBankBin, setEditBankBin] = useState('');
+  const [editBankAccountNumber, setEditBankAccountNumber] = useState('');
+  const [editBankAccountName, setEditBankAccountName] = useState('');
 
   const filteredUsers = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("vi");
-    if (!needle) return users;
-    return users.filter((user) =>
-      [user.username, user.email, user.id, ...user.roles]
-        .join(" ")
-        .toLocaleLowerCase("vi")
-        .includes(needle),
-    );
+    const term = query.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((u) => {
+      const matchName = u.username.toLowerCase().includes(term);
+      const matchEmail = u.email.toLowerCase().includes(term);
+      const matchId = u.id.toLowerCase().includes(term);
+      const matchRoles = (u.roles ?? []).some((r) => String(r).toLowerCase().includes(term));
+      return matchName || matchEmail || matchId || matchRoles;
+    });
   }, [query, users]);
 
-  function openEdit(user: UserResponse) {
+  function openEditModal(user: UserResponse) {
     setMutationError(null);
     setEditingUser(user);
+    setEditEmail(user.email || '');
+    setEditPassword('');
+    setEditAvatarUrl(user.avatarUrl || '');
+    setEditBankBin(user.bankBin || '');
+    setEditBankAccountNumber(user.bankAccountNumber || '');
+    setEditBankAccountName(user.bankAccountName || '');
   }
 
-  async function saveUser(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editingUser) return;
-    const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-    if (password && password.length < 6) {
-      setMutationError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+  async function handleSaveUser(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editingUser || !onUpdateUser) return;
+
+    if (editPassword && editPassword.length < 6) {
+      setMutationError('Mật khẩu mới nếu đặt lại phải có ít nhất 6 ký tự.');
       return;
     }
 
     const payload: UserUpdateRequest = {
-      email,
-      avatarUrl: String(formData.get("avatarUrl") ?? "").trim() || null,
-      bankBin: String(formData.get("bankBin") ?? "").trim() || null,
-      bankAccountNumber: String(formData.get("bankAccountNumber") ?? "").trim() || null,
-      bankAccountName: String(formData.get("bankAccountName") ?? "").trim() || null,
-      ...(password ? { password } : {}),
+      email: editEmail.trim(),
+      avatarUrl: editAvatarUrl.trim() || null,
+      bankBin: editBankBin.trim() || null,
+      bankAccountNumber: editBankAccountNumber.trim() || null,
+      bankAccountName: editBankAccountName.trim() || null,
+      ...(editPassword ? { password: editPassword } : {}),
     };
 
     setIsSaving(true);
     setMutationError(null);
     try {
-      await userService.updateUser(editingUser.id, payload);
+      await onUpdateUser(editingUser.id, payload);
       setEditingUser(null);
-      await loadUsers();
-    } catch (error) {
-      setMutationError(getAdminErrorMessage(error));
+    } catch (err) {
+      setMutationError(err instanceof Error ? err.message : 'Không thể lưu thông tin người dùng.');
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function confirmDelete() {
-    if (!deletingUser) return;
+  async function handleConfirmDelete() {
+    if (!deletingUser || !onDeleteUser) return;
     setIsDeleting(true);
     setMutationError(null);
     try {
-      await userService.deleteUser(deletingUser.id);
+      await onDeleteUser(deletingUser.id);
       setDeletingUser(null);
-      await loadUsers();
-    } catch (error) {
-      setMutationError(getAdminErrorMessage(error));
+    } catch (err) {
+      setMutationError(err instanceof Error ? err.message : 'Không thể xóa người dùng.');
     } finally {
       setIsDeleting(false);
     }
   }
 
   return (
-    <section className="space-y-5" aria-label="Quản lý người dùng">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <p className="text-body-sm text-muted-foreground">
-          Danh sách hồ sơ và thao tác được hỗ trợ bởi API quản trị.
-        </p>
-        <div className="w-full sm:max-w-sm">
-          <Input
-            label="Tìm người dùng"
-            placeholder="Tên, email, ID hoặc vai trò"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            leftIcon={<Search size={18} />}
-          />
+    <div className="w-full space-y-6">
+      {/* Header và tìm kiếm */}
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <h2 className="text-heading-sm font-bold text-foreground">
+            Quản lý Người dùng
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            Tổng cộng: {users.length} tài khoản trong hệ thống
+          </p>
         </div>
-      </div>
 
-      {mutationError && !editingUser && !deletingUser && (
-        <Alert variant="danger" title="Thao tác chưa thành công" role="alert">{mutationError}</Alert>
+        <div className="flex w-full sm:w-auto items-center gap-2">
+          <div className="w-full sm:w-64">
+            <SearchInput
+              placeholder="Tìm tên, email, vai trò..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery('')}
+            />
+          </div>
+          {onRefresh && (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              Làm mới
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {error && (
+        <Alert variant="danger" title="Lỗi tải dữ liệu">
+          {error}
+        </Alert>
       )}
+
       {isLoading ? (
-        <AdminLoading label="Đang tải người dùng..." />
-      ) : loadError ? (
-        <AdminLoadError message={loadError} onRetry={() => void loadUsers()} />
+        <div className="flex justify-center py-16">
+          <Spinner size="lg" label="Đang tải danh sách người dùng..." />
+        </div>
       ) : filteredUsers.length === 0 ? (
-        <Card padding="md">
-          <p className="text-center text-body-sm text-muted-foreground">
-            {users.length ? "Không tìm thấy người dùng phù hợp." : "Chưa có người dùng nào."}
-          </p>
-        </Card>
+        <EmptyState
+          title="Không tìm thấy người dùng"
+          description="Thử thay đổi từ khóa tìm kiếm hoặc làm mới lại trang."
+          size="sm"
+        />
       ) : (
-        <>
-          <p className="text-caption text-muted-foreground" aria-live="polite">
-            {filteredUsers.length} / {users.length} người dùng
-          </p>
-          <div className="hidden overflow-x-auto rounded-card border border-border md:block">
-            <table className="w-full min-w-[900px] text-left text-body-sm">
-              <thead className="bg-muted text-caption uppercase text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Tài khoản</th>
-                  <th scope="col" className="px-4 py-3">Vai trò</th>
-                  <th scope="col" className="px-4 py-3">Trạng thái</th>
-                  <th scope="col" className="px-4 py-3">Ngày tạo</th>
-                  <th scope="col" className="px-4 py-3">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-foreground">{user.username}</p>
-                      <p className="text-caption text-muted-foreground">{user.email}</p>
+        <div className="overflow-x-auto rounded-card border border-border bg-card shadow-card">
+          <table className="w-full text-left border-collapse text-body-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-caption font-bold uppercase tracking-wider text-muted-foreground">
+                <th className="p-3.5">Người dùng</th>
+                <th className="p-3.5">Vai trò</th>
+                <th className="p-3.5">Ngân hàng</th>
+                <th className="p-3.5">Ngày tạo</th>
+                <th className="p-3.5 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filteredUsers.map((user) => {
+                const admin = isAdmin(user);
+
+                return (
+                  <tr key={user.id} className="transition-colors hover:bg-muted/30">
+                    <td className="p-3.5">
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          src={user.avatarUrl ?? undefined}
+                          name={user.username}
+                          size="md"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-foreground">
+                            {user.username}
+                          </p>
+                          <p className="truncate text-caption text-muted-foreground">
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-3">{user.roles.join(", ") || "—"}</td>
-                    <td className="px-4 py-3">{user.status}</td>
-                    <td className="px-4 py-3">{formatAdminDate(user.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" leftIcon={<Pencil size={15} />} onClick={() => openEdit(user)}>Sửa</Button>
+
+                    <td className="p-3.5">
+                      <div className="flex flex-wrap gap-1">
+                        {admin ? (
+                          <Badge variant="warning" size="sm">
+                            <Shield size={12} className="mr-1" />
+                            Admin
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" size="sm">
+                            <User size={12} className="mr-1" />
+                            User
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-3.5">
+                      {user.bankAccountNumber ? (
+                        <div>
+                          <p className="font-mono text-caption font-semibold text-foreground">
+                            {user.bankAccountNumber}
+                          </p>
+                          <p className="text-micro text-muted-foreground">
+                            {user.bankBin} · {user.bankAccountName}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-caption text-muted-foreground">Chưa cấu hình</span>
+                      )}
+                    </td>
+
+                    <td className="p-3.5 text-caption text-muted-foreground">
+                      {formatDate(user.createdAt)}
+                    </td>
+
+                    <td className="p-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <Button
+                          variant="ghost"
                           size="sm"
-                          variant="danger"
-                          leftIcon={<Trash2 size={15} />}
-                          disabled={isAdminAccount(user)}
-                          aria-label={`Xóa tài khoản ${user.username}`}
+                          leftIcon={<Pencil size={14} />}
+                          onClick={() => openEditModal(user)}
+                        >
+                          Sửa
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Trash2 size={14} />}
+                          className="text-danger hover:bg-danger-soft"
+                          disabled={admin}
                           onClick={() => {
                             setMutationError(null);
                             setDeletingUser(user);
@@ -197,98 +274,139 @@ export default function AdminUserManager() {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ul className="space-y-3 md:hidden">
-            {filteredUsers.map((user) => (
-              <li key={user.id}>
-                <Card padding="sm">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-foreground">{user.username}</p>
-                    <p className="break-all text-caption text-muted-foreground">{user.email}</p>
-                    <p className="break-all text-caption text-muted-foreground">{user.id}</p>
-                    <p className="text-body-sm">Vai trò: {user.roles.join(", ") || "—"}</p>
-                    <p className="text-body-sm">Trạng thái: {user.status}</p>
-                    <p className="text-caption text-muted-foreground">Tạo: {formatAdminDate(user.createdAt)}</p>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" leftIcon={<Pencil size={15} />} onClick={() => openEdit(user)}>Sửa</Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      leftIcon={<Trash2 size={15} />}
-                      disabled={isAdminAccount(user)}
-                      onClick={() => {
-                        setMutationError(null);
-                        setDeletingUser(user);
-                      }}
-                    >
-                      Xóa
-                    </Button>
-                  </div>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
+      {/* Modal Chỉnh sửa người dùng */}
       <Modal
-        isOpen={Boolean(editingUser)}
+        isOpen={editingUser !== null}
         onClose={() => {
-          if (!isSaving) {
-            setEditingUser(null);
-            setMutationError(null);
-          }
+          if (!isSaving) setEditingUser(null);
         }}
-        title="Cập nhật người dùng"
-        description={editingUser ? `Tài khoản ${editingUser.username}. Vai trò và trạng thái chỉ hiển thị; API chưa hỗ trợ chỉnh sửa tại màn hình này.` : undefined}
-        size="lg"
-        closeOnEsc={!isSaving}
-        closeOnOverlayClick={!isSaving}
+        title={`Chỉnh sửa tài khoản: ${editingUser?.username}`}
+        size="md"
         footer={
           <div className="flex justify-end gap-3">
-            <Button variant="outline" disabled={isSaving} onClick={() => setEditingUser(null)}>Hủy</Button>
-            <Button type="submit" form="admin-user-form" loading={isSaving} loadingText="Đang lưu...">Lưu thay đổi</Button>
+            <Button
+              variant="outline"
+              disabled={isSaving}
+              onClick={() => setEditingUser(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="primary"
+              loading={isSaving}
+              loadingText="Đang lưu..."
+              onClick={(e) => {
+                const form = document.getElementById('admin-edit-user-form') as HTMLFormElement;
+                if (form) form.requestSubmit();
+                else void handleSaveUser(e as unknown as FormEvent<HTMLFormElement>);
+              }}
+            >
+              Lưu thay đổi
+            </Button>
           </div>
         }
       >
-        {editingUser && (
-          <form id="admin-user-form" className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => void saveUser(event)}>
-            <Input label="Email" name="email" type="email" required defaultValue={editingUser.email} />
-            <Input label="Mật khẩu mới" name="password" type="password" minLength={6} autoComplete="new-password" hint="Để trống nếu không muốn thay đổi." />
-            <Input label="URL ảnh đại diện" name="avatarUrl" type="url" defaultValue={editingUser.avatarUrl ?? ""} />
-            <Input label="Mã ngân hàng (BIN)" name="bankBin" defaultValue={editingUser.bankBin ?? ""} />
-            <Input label="Số tài khoản ngân hàng" name="bankAccountNumber" defaultValue={editingUser.bankAccountNumber ?? ""} />
-            <Input label="Tên chủ tài khoản" name="bankAccountName" defaultValue={editingUser.bankAccountName ?? ""} />
-            {mutationError && <div className="sm:col-span-2"><AdminMutationError message={mutationError} /></div>}
-          </form>
-        )}
+        <form id="admin-edit-user-form" className="space-y-4" onSubmit={(e) => void handleSaveUser(e)}>
+          {mutationError && (
+            <Alert variant="danger">{mutationError}</Alert>
+          )}
+
+          <Input
+            label="Địa chỉ Email"
+            type="email"
+            value={editEmail}
+            onChange={(e) => setEditEmail(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Mật khẩu mới (để trống nếu không đổi)"
+            type="password"
+            placeholder="Tối thiểu 6 ký tự"
+            value={editPassword}
+            onChange={(e) => setEditPassword(e.target.value)}
+          />
+
+          <Input
+            label="Avatar URL"
+            placeholder="https://..."
+            value={editAvatarUrl}
+            onChange={(e) => setEditAvatarUrl(e.target.value)}
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="Mã ngân hàng (BIN)"
+              placeholder="Ví dụ: 970422"
+              value={editBankBin}
+              onChange={(e) => setEditBankBin(e.target.value)}
+            />
+            <Input
+              label="Số tài khoản"
+              placeholder="Ví dụ: 0123456789"
+              value={editBankAccountNumber}
+              onChange={(e) => setEditBankAccountNumber(e.target.value)}
+            />
+          </div>
+
+          <Input
+            label="Tên chủ tài khoản"
+            placeholder="Ví dụ: NGUYEN VAN A"
+            value={editBankAccountName}
+            onChange={(e) => setEditBankAccountName(e.target.value)}
+          />
+        </form>
       </Modal>
 
+      {/* Modal Xác nhận xóa người dùng */}
       <Modal
-        isOpen={Boolean(deletingUser)}
+        isOpen={deletingUser !== null}
         onClose={() => {
-          if (!isDeleting) {
-            setDeletingUser(null);
-            setMutationError(null);
-          }
+          if (!isDeleting) setDeletingUser(null);
         }}
         title="Xác nhận xóa người dùng"
-        description={deletingUser ? `Bạn có chắc muốn xóa tài khoản "${deletingUser.username}"? Thao tác này không thể hoàn tác.` : undefined}
-        closeOnEsc={!isDeleting}
-        closeOnOverlayClick={!isDeleting}
+        size="sm"
         footer={
           <div className="flex justify-end gap-3">
-            <Button variant="outline" disabled={isDeleting} onClick={() => setDeletingUser(null)}>Hủy</Button>
-            <Button variant="danger" loading={isDeleting} loadingText="Đang xóa..." onClick={() => void confirmDelete()}>Xóa tài khoản</Button>
+            <Button
+              variant="outline"
+              disabled={isDeleting}
+              onClick={() => setDeletingUser(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              loading={isDeleting}
+              loadingText="Đang xóa..."
+              onClick={() => void handleConfirmDelete()}
+            >
+              Xóa tài khoản
+            </Button>
           </div>
         }
       >
-        {mutationError && <AdminMutationError message={mutationError} />}
+        <div className="space-y-2">
+          <p className="text-body-sm text-foreground">
+            Bạn có chắc muốn xóa tài khoản <strong>{deletingUser?.username}</strong>?
+          </p>
+          <p className="text-caption text-muted-foreground">
+            Hành động này không thể hoàn tác. Toàn bộ thông tin hồ sơ của tài khoản này sẽ bị xóa khỏi hệ thống.
+          </p>
+          {mutationError && (
+            <div className="mt-3">
+              <Alert variant="danger">{mutationError}</Alert>
+            </div>
+          )}
+        </div>
       </Modal>
-    </section>
+    </div>
   );
 }

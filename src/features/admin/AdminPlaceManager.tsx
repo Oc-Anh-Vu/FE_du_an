@@ -1,328 +1,446 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { Alert } from "../../components/ui/feedback/Alert";
-import { Modal } from "../../components/ui/feedback/Modal";
-import { Button } from "../../components/ui/form/Button";
-import { Input } from "../../components/ui/form/Input";
-import { Card } from "../../components/ui/display/Card";
-import { placeService } from "../../services/place.service";
-import type { PlaceCreationRequest, PlaceResponse } from "../../types";
-import {
-  AdminLoadError,
-  AdminLoading,
-  AdminMutationError,
-} from "./AdminCommon";
-import { getAdminErrorMessage } from "./adminUtils";
+import { useMemo, useState, type FormEvent } from 'react';
+import { Compass, MapPin, Pencil, Plus, Tag as TagIcon, Trash2 } from 'lucide-react';
+import type {
+  PlaceCreationRequest,
+  PlaceResponse,
+  PlaceUpdateRequest,
+  PriceRange,
+  UUID,
+} from '../../types';
+import { SearchInput } from '../../components/ui/form/SearchInput';
+import { Button } from '../../components/ui/form/Button';
+import { Input } from '../../components/ui/form/Input';
+import { Badge } from '../../components/ui/display/Badge';
+import { Modal } from '../../components/ui/feedback/Modal';
+import { Alert } from '../../components/ui/feedback/Alert';
+import { Spinner } from '../../components/ui/feedback/Spinner';
+import { EmptyState } from '../../components/ui/feedback/EmptyState';
 
-export default function AdminPlaceManager() {
-  const [places, setPlaces] = useState<PlaceResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+export interface AdminPlaceManagerProps {
+  places?: PlaceResponse[];
+  isLoading?: boolean;
+  error?: string | null;
+  onCreatePlace?: (payload: PlaceCreationRequest) => Promise<PlaceResponse | null | void>;
+  onUpdatePlace?: (placeId: UUID, payload: PlaceUpdateRequest) => Promise<PlaceResponse | null | void>;
+  onDeletePlace?: (placeId: UUID) => Promise<boolean | void>;
+  onRefresh?: () => Promise<void> | void;
+}
+
+export default function AdminPlaceManager({
+  places = [],
+  isLoading = false,
+  error = null,
+  onCreatePlace,
+  onUpdatePlace,
+  onDeletePlace,
+  onRefresh,
+}: AdminPlaceManagerProps) {
+  const [query, setQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlace, setEditingPlace] = useState<PlaceResponse | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [deletingPlace, setDeletingPlace] = useState<PlaceResponse | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const loadPlaces = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      setPlaces(await placeService.getPlaces());
-    } catch (error) {
-      setLoadError(getAdminErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    placeService.getPlaces().then((result) => {
-      if (active) setPlaces(result);
-    }).catch((error: unknown) => {
-      if (active) setLoadError(getAdminErrorMessage(error));
-    }).finally(() => {
-      if (active) setIsLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Form states cho Modal Thêm/Sửa
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [priceRange, setPriceRange] = useState<PriceRange>(1);
+  const [address, setAddress] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
 
   const filteredPlaces = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("vi");
-    if (!needle) return places;
-    return places.filter((place) =>
-      [place.name, place.category ?? "", place.address ?? ""]
-        .join(" ")
-        .toLocaleLowerCase("vi")
-        .includes(needle),
+    const term = query.trim().toLowerCase();
+    if (!term) return places;
+    return places.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.category && p.category.toLowerCase().includes(term)) ||
+        (p.address && p.address.toLowerCase().includes(term)),
     );
   }, [places, query]);
 
-  function openForm(place?: PlaceResponse) {
+  function openCreateModal() {
     setMutationError(null);
-    setEditingPlace(place ?? null);
-    setIsCreating(!place);
+    setEditingPlace(null);
+    setName('');
+    setCategory('');
+    setPriceRange(1);
+    setAddress('');
+    setLatitude('10.7769');
+    setLongitude('106.7009');
+    setImageUrl('');
+    setIsModalOpen(true);
   }
 
-  async function savePlace(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const name = String(formData.get("name") ?? "").trim();
-    const latitudeValue = String(formData.get("latitude") ?? "").trim();
-    const longitudeValue = String(formData.get("longitude") ?? "").trim();
-    const latitude = Number(latitudeValue);
-    const longitude = Number(longitudeValue);
+  function openEditModal(place: PlaceResponse) {
+    setMutationError(null);
+    setEditingPlace(place);
+    setName(place.name);
+    setCategory(place.category || '');
+    setPriceRange((place.priceRange as PriceRange) || 1);
+    setAddress(place.address || '');
+    setLatitude(String(place.latitude));
+    setLongitude(String(place.longitude));
+    setImageUrl(place.imageUrl || '');
+    setIsModalOpen(true);
+  }
 
-    if (!name) {
-      setMutationError("Tên địa điểm là bắt buộc.");
+  async function handleSavePlace(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMutationError(null);
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+      setMutationError('Vĩ độ (Latitude) phải nằm trong khoảng từ -90 đến 90.');
       return;
     }
-    if (!latitudeValue || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-      setMutationError("Vĩ độ phải là số trong khoảng -90 đến 90.");
-      return;
-    }
-    if (!longitudeValue || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      setMutationError("Kinh độ phải là số trong khoảng -180 đến 180.");
+    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
+      setMutationError('Kinh độ (Longitude) phải nằm trong khoảng từ -180 đến 180.');
       return;
     }
 
-    const rawPriceRange = String(formData.get("priceRange") ?? "");
     const payload: PlaceCreationRequest = {
-      name,
-      category: String(formData.get("category") ?? "").trim() || null,
-      priceRange: rawPriceRange ? Number(rawPriceRange) : null,
-      imageUrl: String(formData.get("imageUrl") ?? "").trim() || null,
-      address: String(formData.get("address") ?? "").trim() || null,
-      latitude,
-      longitude,
+      name: name.trim(),
+      category: category.trim() || null,
+      priceRange,
+      address: address.trim() || null,
+      latitude: lat,
+      longitude: lng,
+      imageUrl: imageUrl.trim() || null,
     };
 
     setIsSaving(true);
-    setMutationError(null);
     try {
       if (editingPlace) {
-        await placeService.updatePlace(editingPlace.id, payload);
+        if (onUpdatePlace) await onUpdatePlace(editingPlace.id, payload);
       } else {
-        await placeService.createPlace(payload);
+        if (onCreatePlace) await onCreatePlace(payload);
       }
-      setEditingPlace(null);
-      setIsCreating(false);
-      await loadPlaces();
-    } catch (error) {
-      setMutationError(getAdminErrorMessage(error));
+      setIsModalOpen(false);
+    } catch (err) {
+      setMutationError(err instanceof Error ? err.message : 'Không thể lưu địa điểm.');
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function confirmDelete() {
-    if (!deletingPlace) return;
+  async function handleConfirmDelete() {
+    if (!deletingPlace || !onDeletePlace) return;
     setIsDeleting(true);
     setMutationError(null);
     try {
-      await placeService.deletePlace(deletingPlace.id);
+      await onDeletePlace(deletingPlace.id);
       setDeletingPlace(null);
-      await loadPlaces();
-    } catch (error) {
-      setMutationError(getAdminErrorMessage(error));
+    } catch (err) {
+      setMutationError(err instanceof Error ? err.message : 'Không thể xóa địa điểm.');
     } finally {
       setIsDeleting(false);
     }
   }
 
-  const formPlace = editingPlace;
-  const isFormOpen = isCreating || Boolean(editingPlace);
-
   return (
-    <section className="space-y-5" aria-label="Quản lý địa điểm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <p className="text-body-sm text-muted-foreground">
-          Danh mục địa điểm ăn uống được quản lý trực tiếp qua API.
-        </p>
-        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
-          <div className="w-full sm:w-72">
-            <Input
-              label="Tìm địa điểm"
-              placeholder="Tên, danh mục hoặc địa chỉ"
+    <div className="w-full space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <h2 className="text-heading-sm font-bold text-foreground">
+            Quản lý Địa điểm ăn uống
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            Tổng cộng: {places.length} địa điểm trong hệ thống
+          </p>
+        </div>
+
+        <div className="flex w-full sm:w-auto items-center gap-2">
+          <div className="w-full sm:w-64">
+            <SearchInput
+              placeholder="Tìm tên quán, danh mục, địa chỉ..."
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              leftIcon={<Search size={18} />}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery('')}
             />
           </div>
-          <Button leftIcon={<Plus size={18} />} onClick={() => openForm()}>Thêm địa điểm</Button>
+          <Button
+            variant="primary"
+            size="md"
+            leftIcon={<Plus size={16} />}
+            onClick={openCreateModal}
+          >
+            Thêm quán
+          </Button>
+          {onRefresh && (
+            <Button variant="outline" size="md" onClick={onRefresh}>
+              Làm mới
+            </Button>
+          )}
         </div>
-      </div>
+      </header>
 
-      {mutationError && !isFormOpen && !deletingPlace && (
-        <Alert variant="danger" title="Thao tác chưa thành công" role="alert">{mutationError}</Alert>
+      {error && (
+        <Alert variant="danger" title="Lỗi tải dữ liệu">
+          {error}
+        </Alert>
       )}
+
       {isLoading ? (
-        <AdminLoading label="Đang tải địa điểm..." />
-      ) : loadError ? (
-        <AdminLoadError message={loadError} onRetry={() => void loadPlaces()} />
+        <div className="flex justify-center py-16">
+          <Spinner size="lg" label="Đang tải danh sách địa điểm..." />
+        </div>
       ) : filteredPlaces.length === 0 ? (
-        <Card padding="md">
-          <p className="text-center text-body-sm text-muted-foreground">
-            {places.length ? "Không tìm thấy địa điểm phù hợp." : "Chưa có địa điểm nào."}
-          </p>
-        </Card>
+        <EmptyState
+          title="Không tìm thấy địa điểm"
+          description="Thử thay đổi từ khóa tìm kiếm hoặc bấm Thêm quán mới."
+          size="sm"
+        />
       ) : (
-        <>
-          <p className="text-caption text-muted-foreground" aria-live="polite">
-            {filteredPlaces.length} / {places.length} địa điểm
-          </p>
-          <div className="hidden overflow-x-auto rounded-card border border-border md:block">
-            <table className="w-full min-w-[850px] text-left text-body-sm">
-              <thead className="bg-muted text-caption uppercase text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Địa điểm</th>
-                  <th scope="col" className="px-4 py-3">Danh mục</th>
-                  <th scope="col" className="px-4 py-3">Mức giá</th>
-                  <th scope="col" className="px-4 py-3">Tọa độ</th>
-                  <th scope="col" className="px-4 py-3">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
-                {filteredPlaces.map((place) => (
-                  <tr key={place.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-foreground">{place.name}</p>
-                      <p className="text-caption text-muted-foreground">{place.address || "Chưa có địa chỉ"}</p>
-                    </td>
-                    <td className="px-4 py-3">{place.category || "—"}</td>
-                    <td className="px-4 py-3">{place.priceRange ? `${place.priceRange}/3` : "—"}</td>
-                    <td className="px-4 py-3">{place.latitude}, {place.longitude}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" leftIcon={<Pencil size={15} />} onClick={() => openForm(place)}>Sửa</Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          leftIcon={<Trash2 size={15} />}
-                          aria-label={`Xóa địa điểm ${place.name}`}
-                          onClick={() => {
-                            setMutationError(null);
-                            setDeletingPlace(place);
+        <div className="overflow-x-auto rounded-card border border-border bg-card shadow-card">
+          <table className="w-full text-left border-collapse text-body-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-caption font-bold uppercase tracking-wider text-muted-foreground">
+                <th className="p-3.5">Quán ăn</th>
+                <th className="p-3.5">Danh mục</th>
+                <th className="p-3.5">Khoảng giá</th>
+                <th className="p-3.5">Tọa độ GPS</th>
+                <th className="p-3.5">Địa chỉ</th>
+                <th className="p-3.5 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filteredPlaces.map((place) => (
+                <tr key={place.id} className="transition-colors hover:bg-muted/30">
+                  <td className="p-3.5">
+                    <div className="flex items-center gap-3">
+                      {place.imageUrl ? (
+                        <img
+                          src={place.imageUrl}
+                          alt={place.name}
+                          className="size-10 rounded-control object-cover border border-border shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
                           }}
-                        >
-                          Xóa
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ul className="space-y-3 md:hidden">
-            {filteredPlaces.map((place) => (
-              <li key={place.id}>
-                <Card padding="sm">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-foreground">{place.name}</p>
-                    <p className="text-body-sm text-muted-foreground">{place.category || "Chưa phân loại"}</p>
-                    <p className="text-body-sm">{place.address || "Chưa có địa chỉ"}</p>
-                    <p className="text-caption text-muted-foreground">Giá: {place.priceRange ? `${place.priceRange}/3` : "Chưa cập nhật"}</p>
-                    <p className="text-caption text-muted-foreground">Tọa độ: {place.latitude}, {place.longitude}</p>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" leftIcon={<Pencil size={15} />} onClick={() => openForm(place)}>Sửa</Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      leftIcon={<Trash2 size={15} />}
-                      onClick={() => {
-                        setMutationError(null);
-                        setDeletingPlace(place);
-                      }}
-                    >
-                      Xóa
-                    </Button>
-                  </div>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        </>
+                        />
+                      ) : (
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-control bg-secondary text-base">
+                          🍽️
+                        </div>
+                      )}
+                      <span className="font-bold text-foreground">
+                        {place.name}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="p-3.5">
+                    {place.category ? (
+                      <Badge variant="default" size="sm">
+                        <TagIcon size={12} className="mr-1" />
+                        {place.category}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-caption">—</span>
+                    )}
+                  </td>
+
+                  <td className="p-3.5 font-bold text-primary-strong">
+                    {place.priceRange ? '$'.repeat(Number(place.priceRange)) : '$'}
+                  </td>
+
+                  <td className="p-3.5 font-mono text-caption text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Compass size={13} className="text-primary" />
+                      <span>
+                        {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="p-3.5 text-caption text-muted-foreground max-w-xs truncate">
+                    <div className="flex items-center gap-1">
+                      <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                      <span className="truncate">{place.address || 'Chưa có địa chỉ'}</span>
+                    </div>
+                  </td>
+
+                  <td className="p-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Pencil size={14} />}
+                        onClick={() => openEditModal(place)}
+                      >
+                        Sửa
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Trash2 size={14} />}
+                        className="text-danger hover:bg-danger-soft"
+                        onClick={() => {
+                          setMutationError(null);
+                          setDeletingPlace(place);
+                        }}
+                      >
+                        Xóa
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
+      {/* Modal Thêm / Sửa địa điểm */}
       <Modal
-        isOpen={isFormOpen}
+        isOpen={isModalOpen}
         onClose={() => {
-          if (!isSaving) {
-            setEditingPlace(null);
-            setIsCreating(false);
-            setMutationError(null);
-          }
+          if (!isSaving) setIsModalOpen(false);
         }}
-        title={editingPlace ? "Chỉnh sửa địa điểm" : "Thêm địa điểm"}
-        description="Nhập thông tin theo yêu cầu của API địa điểm."
-        size="lg"
-        closeOnEsc={!isSaving}
-        closeOnOverlayClick={!isSaving}
+        title={editingPlace ? `Chỉnh sửa: ${editingPlace.name}` : 'Thêm địa điểm ăn uống mới'}
+        size="md"
         footer={
           <div className="flex justify-end gap-3">
-            <Button variant="outline" disabled={isSaving} onClick={() => {
-              setEditingPlace(null);
-              setIsCreating(false);
-            }}>Hủy</Button>
-            <Button type="submit" form="admin-place-form" loading={isSaving} loadingText="Đang lưu...">
-              {editingPlace ? "Lưu thay đổi" : "Tạo địa điểm"}
+            <Button
+              variant="outline"
+              disabled={isSaving}
+              onClick={() => setIsModalOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="primary"
+              loading={isSaving}
+              loadingText="Đang lưu..."
+              onClick={() => {
+                const form = document.getElementById('admin-place-form') as HTMLFormElement;
+                if (form) form.requestSubmit();
+              }}
+            >
+              {editingPlace ? 'Lưu thay đổi' : 'Thêm địa điểm'}
             </Button>
           </div>
         }
       >
-        <form id="admin-place-form" className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => void savePlace(event)}>
-          <Input label="Tên địa điểm" name="name" required maxLength={255} defaultValue={formPlace?.name ?? ""} className="sm:col-span-2" />
-          <Input label="Danh mục" name="category" defaultValue={formPlace?.category ?? ""} />
-          <div className="w-full space-y-1.5">
-            <label htmlFor="admin-place-price-range" className="block text-body-sm font-semibold text-foreground">Mức giá</label>
-            <select
-              id="admin-place-price-range"
-              name="priceRange"
-              defaultValue={formPlace?.priceRange?.toString() ?? ""}
-              className="focus-ring h-11 w-full rounded-control border border-input bg-card px-4 text-body text-foreground"
-            >
-              <option value="">Chưa cập nhật</option>
-              <option value="1">1 - Tiết kiệm</option>
-              <option value="2">2 - Trung bình</option>
-              <option value="3">3 - Cao</option>
-            </select>
+        <form id="admin-place-form" className="space-y-4" onSubmit={(e) => void handleSavePlace(e)}>
+          {mutationError && (
+            <Alert variant="danger">{mutationError}</Alert>
+          )}
+
+          <Input
+            label="Tên quán ăn"
+            placeholder="Ví dụ: Phở Thìn Lò Đúc, Cơm Tấm Ba Ghiền..."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="Danh mục món"
+              placeholder="Ví dụ: Phở, Lẩu, Cơm tấm..."
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+
+            <div>
+              <label htmlFor="price-select" className="block text-body-sm font-semibold text-foreground mb-1">
+                Khoảng giá
+              </label>
+              <select
+                id="price-select"
+                value={priceRange}
+                onChange={(e) => setPriceRange(Number(e.target.value) as PriceRange)}
+                className="focus-ring h-11 w-full rounded-control border border-border bg-card px-3 text-body-sm font-semibold text-foreground transition-colors hover:border-primary/50"
+              >
+                <option value={1}>$ · Bình dân / Tiết kiệm</option>
+                <option value={2}>$$ · Vừa phải / Phổ thông</option>
+                <option value={3}>$$$ · Cao cấp</option>
+              </select>
+            </div>
           </div>
-          <Input label="Địa chỉ" name="address" defaultValue={formPlace?.address ?? ""} className="sm:col-span-2" />
-          <Input label="URL hình ảnh" name="imageUrl" type="url" defaultValue={formPlace?.imageUrl ?? ""} className="sm:col-span-2" />
-          <Input label="Vĩ độ (latitude)" name="latitude" type="number" required min={-90} max={90} step="any" defaultValue={formPlace?.latitude ?? ""} />
-          <Input label="Kinh độ (longitude)" name="longitude" type="number" required min={-180} max={180} step="any" defaultValue={formPlace?.longitude ?? ""} />
-          {mutationError && <div className="sm:col-span-2"><AdminMutationError message={mutationError} /></div>}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="Vĩ độ (Latitude)"
+              placeholder="Ví dụ: 10.7769"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              required
+            />
+            <Input
+              label="Kinh độ (Longitude)"
+              placeholder="Ví dụ: 106.7009"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              required
+            />
+          </div>
+
+          <Input
+            label="Địa chỉ cụ thể"
+            placeholder="Ví dụ: 13 Lò Đúc, Hai Bà Trưng, Hà Nội"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+
+          <Input
+            label="Image URL"
+            placeholder="https://..."
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+          />
         </form>
       </Modal>
 
+      {/* Modal Xóa địa điểm */}
       <Modal
-        isOpen={Boolean(deletingPlace)}
+        isOpen={deletingPlace !== null}
         onClose={() => {
-          if (!isDeleting) {
-            setDeletingPlace(null);
-            setMutationError(null);
-          }
+          if (!isDeleting) setDeletingPlace(null);
         }}
         title="Xác nhận xóa địa điểm"
-        description={deletingPlace ? `Bạn có chắc muốn xóa "${deletingPlace.name}"? Thao tác này không thể hoàn tác.` : undefined}
-        closeOnEsc={!isDeleting}
-        closeOnOverlayClick={!isDeleting}
+        size="sm"
         footer={
           <div className="flex justify-end gap-3">
-            <Button variant="outline" disabled={isDeleting} onClick={() => setDeletingPlace(null)}>Hủy</Button>
-            <Button variant="danger" loading={isDeleting} loadingText="Đang xóa..." onClick={() => void confirmDelete()}>Xóa địa điểm</Button>
+            <Button
+              variant="outline"
+              disabled={isDeleting}
+              onClick={() => setDeletingPlace(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              loading={isDeleting}
+              loadingText="Đang xóa..."
+              onClick={() => void handleConfirmDelete()}
+            >
+              Xóa địa điểm
+            </Button>
           </div>
         }
       >
-        {mutationError && <AdminMutationError message={mutationError} />}
+        <div className="space-y-2">
+          <p className="text-body-sm text-foreground">
+            Bạn có chắc chắn muốn xóa địa điểm <strong>{deletingPlace?.name}</strong>?
+          </p>
+          <p className="text-caption text-muted-foreground">
+            Quán ăn này sẽ bị gỡ bỏ khỏi hệ thống và không còn xuất hiện trong các bộ bài quẹt thẻ.
+          </p>
+          {mutationError && (
+            <div className="mt-3">
+              <Alert variant="danger">{mutationError}</Alert>
+            </div>
+          )}
+        </div>
       </Modal>
-    </section>
+    </div>
   );
 }
