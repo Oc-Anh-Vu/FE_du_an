@@ -4,10 +4,10 @@ import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input, PasswordInput } from '../../components/ui/form';
 import { Stack } from '../../components/layout/Stack';
 import { normalizeApiError } from '../../services/apiClient';
-import { userService } from '../../services/user.service';
 import { useUIStore } from '../../store/uiStore';
-import { ApiErrorCode, type UserResponse } from '../../types';
+import { ApiErrorCode, type UserCreationRequest, type UserResponse } from '../../types';
 import { cn } from '../../utils/cn';
+import { useAuthActions } from './useAuthActions';
 
 type SignupField = 'username' | 'email' | 'password';
 type SignupFieldErrors = Partial<Record<SignupField, string>>;
@@ -21,7 +21,11 @@ interface SignupFormValues {
 export interface SignupFormProps {
   defaultUsername?: string;
   defaultEmail?: string;
-  onSignupSuccess?: (email: string, username: string, user: UserResponse) => void;
+  error?: string | null;
+  loading?: boolean;
+  onSubmit?: (payload: UserCreationRequest) => Promise<UserResponse | void>;
+  onSuccess?: (result: { email: string; username: string; user?: UserResponse }) => void;
+  onSignupSuccess?: (email: string, username: string, user?: UserResponse) => void;
   className?: string;
 }
 
@@ -87,9 +91,14 @@ function resolveSignupServerError(code: number, fallbackMessage: string): string
 export function SignupForm({
   defaultUsername = '',
   defaultEmail = '',
+  error: externalError = null,
+  loading: externalLoading = false,
+  onSubmit,
+  onSuccess,
   onSignupSuccess,
   className,
 }: SignupFormProps) {
+  const { submitSignup } = useAuthActions();
   const usernameInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +110,8 @@ export function SignupForm({
   });
   const [fieldErrors, setFieldErrors] = useState<SignupFieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const loading = submitting || externalLoading;
 
   function updateField(field: SignupField, nextValue: string) {
     setValues((prev) => ({ ...prev, [field]: nextValue }));
@@ -147,18 +157,21 @@ export function SignupForm({
     const normalizedUsername = values.username.trim();
     const normalizedEmail = values.email.trim();
 
-    setLoading(true);
+    setSubmitting(true);
     try {
-      const createdUser = await userService.createUser({
+      const request = {
         username: normalizedUsername,
         email: normalizedEmail,
         password: values.password,
-      });
+      };
+      const createdUser = onSubmit ? await onSubmit(request) : await submitSignup(request);
 
       useUIStore
         .getState()
         .showToast('success', 'Đăng ký tài khoản thành công!');
-      onSignupSuccess?.(normalizedEmail, normalizedUsername, createdUser);
+      const user = createdUser || undefined;
+      onSuccess?.({ email: normalizedEmail, username: normalizedUsername, user });
+      onSignupSuccess?.(normalizedEmail, normalizedUsername, user);
     } catch (error) {
       const normalized = normalizeApiError(error);
 
@@ -184,16 +197,16 @@ export function SignupForm({
 
       setServerError(resolveSignupServerError(normalized.code, normalized.message));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
     <form className={cn('w-full', className)} onSubmit={handleSubmit} noValidate>
       <Stack gap={4}>
-        {serverError && (
+        {(serverError ?? externalError) && (
           <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
-            {serverError}
+            {serverError ?? externalError}
           </Alert>
         )}
 

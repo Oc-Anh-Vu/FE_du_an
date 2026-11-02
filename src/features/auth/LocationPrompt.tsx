@@ -17,6 +17,8 @@ import type { GeoCoordinates } from '../../utils/geoCalculator';
 
 export interface LocationPromptProps {
   onLocationChange?: (coords: GeoCoordinates) => void;
+  onRequestLocation?: (coords: GeoCoordinates | null) => void;
+  onSelectDefaultCity?: (preset: DefaultCityPreset, coords: GeoCoordinates) => void;
   compact?: boolean;
   className?: string;
 }
@@ -66,6 +68,8 @@ function matchCityPreset(coords: GeoCoordinates | null): DefaultCityPreset | nul
 
 export function LocationPrompt({
   onLocationChange,
+  onRequestLocation,
+  onSelectDefaultCity,
   compact = false,
   className,
 }: LocationPromptProps) {
@@ -84,6 +88,7 @@ export function LocationPrompt({
 
   async function handleRequestGps() {
     const nextCoords = await requestLocation();
+    onRequestLocation?.(nextCoords);
     if (nextCoords) {
       useUIStore
         .getState()
@@ -98,6 +103,7 @@ export function LocationPrompt({
     useUIStore
       .getState()
       .showToast('info', `Đã chọn tọa độ mặc định: ${cityLabel}`);
+    onSelectDefaultCity?.(preset, nextCoords);
     onLocationChange?.(nextCoords);
   }
 

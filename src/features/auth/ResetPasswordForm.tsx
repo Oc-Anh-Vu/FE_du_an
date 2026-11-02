@@ -4,10 +4,10 @@ import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input, OtpInput, PasswordInput } from '../../components/ui/form';
 import { Stack } from '../../components/layout/Stack';
 import { normalizeApiError } from '../../services/apiClient';
-import { authService } from '../../services/auth.service';
 import { useUIStore } from '../../store/uiStore';
-import { ApiErrorCode } from '../../types';
+import { ApiErrorCode, type ResetPasswordRequest } from '../../types';
 import { cn } from '../../utils/cn';
+import { useAuthActions } from './useAuthActions';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_LENGTH = 6;
@@ -23,8 +23,13 @@ interface ResetPasswordValues {
 }
 
 export interface ResetPasswordFormProps {
+  initialEmail?: string;
   defaultEmail?: string;
+  error?: string | null;
+  onSubmit?: (payload: ResetPasswordRequest) => Promise<unknown>;
+  onResendOtp?: (email: string) => Promise<unknown>;
   onResetSuccess?: (email: string) => void;
+  onSuccess?: (email: string) => void;
   className?: string;
 }
 
@@ -83,10 +88,17 @@ function resolveResetPasswordError(code: number, fallbackMessage: string): strin
 }
 
 export function ResetPasswordForm({
-  defaultEmail = '',
+  initialEmail,
+  defaultEmail: legacyDefaultEmail = '',
+  error: externalError = null,
+  onSubmit,
+  onResendOtp,
   onResetSuccess,
+  onSuccess,
   className,
 }: ResetPasswordFormProps) {
+  const defaultEmail = initialEmail ?? legacyDefaultEmail;
+  const { confirmPasswordReset, requestPasswordReset } = useAuthActions();
   const otpLabelId = useId();
   const emailInputRef = useRef<HTMLInputElement>(null);
   const otpFirstInputRef = useRef<HTMLInputElement>(null);
@@ -164,7 +176,7 @@ export function ResetPasswordForm({
     const normalizedEmail = values.email.trim();
     setResendingOtp(true);
     try {
-      await authService.forgotPassword({ email: normalizedEmail });
+      await (onResendOtp ?? requestPasswordReset)(normalizedEmail);
       setCooldown(RESEND_COOLDOWN_SECONDS);
       setResendInfo(`Mã OTP mới đã được gửi tới ${normalizedEmail}.`);
       otpFirstInputRef.current?.focus();
@@ -192,7 +204,7 @@ export function ResetPasswordForm({
 
     setLoading(true);
     try {
-      await authService.resetPassword({
+      await (onSubmit ?? confirmPasswordReset)({
         email: normalizedEmail,
         otp: normalizedOtp,
         newPassword: values.newPassword,
@@ -202,6 +214,7 @@ export function ResetPasswordForm({
         .getState()
         .showToast('success', 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.');
       onResetSuccess?.(normalizedEmail);
+      onSuccess?.(normalizedEmail);
     } catch (error) {
       const normalized = normalizeApiError(error);
       if (normalized.code === ApiErrorCode.INVALID_OTP) {
@@ -248,9 +261,9 @@ export function ResetPasswordForm({
           </Alert>
         )}
 
-        {serverError && (
+        {(serverError ?? externalError) && (
           <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
-            {serverError}
+            {serverError ?? externalError}
           </Alert>
         )}
 

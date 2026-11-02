@@ -4,19 +4,24 @@ import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input, OtpInput } from '../../components/ui/form';
 import { Stack } from '../../components/layout/Stack';
 import { normalizeApiError } from '../../services/apiClient';
-import { authService } from '../../services/auth.service';
 import { useUIStore } from '../../store/uiStore';
-import { ApiErrorCode } from '../../types';
+import { ApiErrorCode, type VerifyOtpRequest, type VerifyOtpResponse } from '../../types';
 import { cn } from '../../utils/cn';
+import { useAuthActions } from './useAuthActions';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export interface VerifyOtpFormProps {
+  initialEmail?: string;
   defaultEmail?: string;
-  onVerified?: (email: string) => void;
+  error?: string | null;
+  onSendOtp?: (email: string) => Promise<unknown>;
+  onVerifyOtp?: (payload: VerifyOtpRequest) => Promise<VerifyOtpResponse | boolean | void>;
   onOtpSent?: (email: string) => void;
+  onVerified?: (email: string) => void;
+  onSuccess?: (email: string) => void;
   className?: string;
 }
 
@@ -53,11 +58,18 @@ function resolveOtpErrorMessage(code: number, fallbackMessage: string): string {
 }
 
 export function VerifyOtpForm({
-  defaultEmail = '',
-  onVerified,
+  initialEmail,
+  defaultEmail: legacyDefaultEmail = '',
+  error: externalError = null,
+  onSendOtp,
+  onVerifyOtp,
   onOtpSent,
+  onVerified,
+  onSuccess,
   className,
 }: VerifyOtpFormProps) {
+  const defaultEmail = initialEmail ?? legacyDefaultEmail;
+  const { sendVerificationOtp, verifyEmailOtp } = useAuthActions();
   const otpLabelId = useId();
   const emailInputRef = useRef<HTMLInputElement>(null);
   const otpFirstInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +118,7 @@ export function VerifyOtpForm({
     const normalizedEmail = email.trim();
     setSendingOtp(true);
     try {
-      await authService.sendOtp({ email: normalizedEmail });
+      await (onSendOtp ?? sendVerificationOtp)(normalizedEmail);
       setCooldown(RESEND_COOLDOWN_SECONDS);
       setStatusMessage(
         `Mã OTP 6 chữ số đã được gửi tới ${normalizedEmail}. Mã có hiệu lực trong 5 phút.`,
@@ -150,12 +162,16 @@ export function VerifyOtpForm({
 
     setVerifyingOtp(true);
     try {
-      const response = await authService.verifyOtp({
+      const response = await (onVerifyOtp ?? verifyEmailOtp)({
         email: normalizedEmail,
         otp: normalizedOtp,
       });
 
-      if (!response?.verified) {
+      const verified =
+        response === undefined ||
+        response === true ||
+        (typeof response === 'object' && response.verified);
+      if (!verified) {
         setOtpError('Mã OTP không hợp lệ hoặc đã hết hạn.');
         setServerError('Mã OTP không hợp lệ hoặc đã hết hạn (5 phút).');
         otpFirstInputRef.current?.focus();
@@ -166,6 +182,7 @@ export function VerifyOtpForm({
         .getState()
         .showToast('success', 'Xác thực mã OTP thành công!');
       onVerified?.(normalizedEmail);
+      onSuccess?.(normalizedEmail);
     } catch (error) {
       const normalized = normalizeApiError(error);
       if (normalized.code === ApiErrorCode.INVALID_OTP) {
@@ -201,9 +218,9 @@ export function VerifyOtpForm({
           </Alert>
         )}
 
-        {serverError && (
+        {(serverError ?? externalError) && (
           <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
-            {serverError}
+            {serverError ?? externalError}
           </Alert>
         )}
 

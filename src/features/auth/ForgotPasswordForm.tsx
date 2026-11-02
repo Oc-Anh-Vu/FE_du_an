@@ -4,16 +4,20 @@ import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input } from '../../components/ui/form';
 import { Stack } from '../../components/layout/Stack';
 import { normalizeApiError } from '../../services/apiClient';
-import { authService } from '../../services/auth.service';
 import { useUIStore } from '../../store/uiStore';
 import { ApiErrorCode } from '../../types';
 import { cn } from '../../utils/cn';
+import { useAuthActions } from './useAuthActions';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface ForgotPasswordFormProps {
+  initialEmail?: string;
   defaultEmail?: string;
+  error?: string | null;
+  onSubmit?: (email: string) => Promise<unknown>;
   onOtpSent?: (email: string) => void;
+  onSuccess?: (email: string) => void;
   className?: string;
 }
 
@@ -40,10 +44,16 @@ function resolveForgotPasswordError(code: number, fallbackMessage: string): stri
 }
 
 export function ForgotPasswordForm({
-  defaultEmail = '',
+  initialEmail,
+  defaultEmail: legacyDefaultEmail = '',
+  error: externalError = null,
+  onSubmit,
   onOtpSent,
+  onSuccess,
   className,
 }: ForgotPasswordFormProps) {
+  const defaultEmail = initialEmail ?? legacyDefaultEmail;
+  const { requestPasswordReset } = useAuthActions();
   const emailInputRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState(defaultEmail);
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -68,7 +78,7 @@ export function ForgotPasswordForm({
     const normalizedEmail = email.trim();
     setLoading(true);
     try {
-      await authService.forgotPassword({ email: normalizedEmail });
+      await (onSubmit ?? requestPasswordReset)(normalizedEmail);
       useUIStore
         .getState()
         .showToast(
@@ -76,6 +86,7 @@ export function ForgotPasswordForm({
           'Yêu cầu khôi phục mật khẩu thành công. Vui lòng kiểm tra mã OTP.',
         );
       onOtpSent?.(normalizedEmail);
+      onSuccess?.(normalizedEmail);
     } catch (error) {
       const normalized = normalizeApiError(error);
       if (normalized.code === ApiErrorCode.USER_NOT_EXISTED) {
@@ -100,9 +111,9 @@ export function ForgotPasswordForm({
           .
         </Alert>
 
-        {serverError && (
+        {(serverError ?? externalError) && (
           <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
-            {serverError}
+            {serverError ?? externalError}
           </Alert>
         )}
 

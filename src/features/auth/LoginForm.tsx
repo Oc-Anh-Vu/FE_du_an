@@ -3,11 +3,11 @@ import { useRef, useState, type FocusEvent, type FormEvent } from 'react';
 import { Alert } from '../../components/ui/feedback/Alert';
 import { Button, Input, PasswordInput } from '../../components/ui/form';
 import { Stack } from '../../components/layout/Stack';
-import { useAuth } from '../../hooks/useAuth';
 import { normalizeApiError } from '../../services/apiClient';
 import { useUIStore } from '../../store/uiStore';
-import { ApiErrorCode, type UserResponse } from '../../types';
+import { ApiErrorCode, type AuthenticationRequest, type UserResponse } from '../../types';
 import { cn } from '../../utils/cn';
+import { useAuthActions } from './useAuthActions';
 
 type LoginField = 'username' | 'password';
 type LoginFieldErrors = Partial<Record<LoginField, string>>;
@@ -20,6 +20,10 @@ interface LoginFormValues {
 export interface LoginFormProps {
   defaultUsername?: string;
   infoMessage?: string | null;
+  error?: string | null;
+  loading?: boolean;
+  onSubmit?: (payload: AuthenticationRequest) => Promise<UserResponse | void>;
+  onSuccess?: (user: UserResponse) => void;
   onLoginSuccess?: (user: UserResponse) => void;
   className?: string;
 }
@@ -67,10 +71,14 @@ function resolveLoginErrorMessage(code: number, fallbackMessage: string): string
 export function LoginForm({
   defaultUsername = '',
   infoMessage = null,
+  error: externalError = null,
+  loading: externalLoading = false,
+  onSubmit,
+  onSuccess,
   onLoginSuccess,
   className,
 }: LoginFormProps) {
-  const { login } = useAuth();
+  const { submitLogin } = useAuthActions();
   const usernameInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,7 +88,8 @@ export function LoginForm({
   });
   const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const loading = submitting || externalLoading;
 
   function updateField(field: LoginField, nextValue: string) {
     setValues((prev) => ({ ...prev, [field]: nextValue }));
@@ -119,17 +128,18 @@ export function LoginForm({
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     try {
-      const userProfile = await login({
-        username: values.username.trim(),
-        password: values.password,
-      });
+      const payload = { username: values.username.trim(), password: values.password };
+      const userProfile = onSubmit ? await onSubmit(payload) : await submitLogin(payload);
 
-      useUIStore
-        .getState()
-        .showToast('success', `Chào mừng ${userProfile.username} quay trở lại!`);
-      onLoginSuccess?.(userProfile);
+      if (userProfile) {
+        useUIStore
+          .getState()
+          .showToast('success', `Chào mừng ${userProfile.username} quay trở lại!`);
+        onSuccess?.(userProfile);
+        onLoginSuccess?.(userProfile);
+      }
     } catch (error) {
       const normalized = normalizeApiError(error);
       if (normalized.code === ApiErrorCode.USER_NOT_EXISTED) {
@@ -140,7 +150,7 @@ export function LoginForm({
       }
       setServerError(resolveLoginErrorMessage(normalized.code, normalized.message));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
@@ -153,9 +163,9 @@ export function LoginForm({
           </Alert>
         )}
 
-        {serverError && (
+        {(serverError ?? externalError) && (
           <Alert variant="danger" role="alert" onClose={() => setServerError(null)}>
-            {serverError}
+            {serverError ?? externalError}
           </Alert>
         )}
 
