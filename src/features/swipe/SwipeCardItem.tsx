@@ -20,6 +20,13 @@ export default function SwipeCardItem({
   const [direction, setDirection] = useState<'left' | 'right' | null>(null);
   const [heartsTrigger, setHeartsTrigger] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
+  const [prevPlaceId, setPrevPlaceId] = useState(place.id);
+
+  if (place.id !== prevPlaceId) {
+    setPrevPlaceId(place.id);
+    setDirection(null);
+    setImageFailed(false);
+  }
 
   const priceLabel =
     typeof place.priceRange === 'number'

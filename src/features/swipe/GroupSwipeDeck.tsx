@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { CheckCircle2, Eye, Sparkles } from 'lucide-react';
 import type { PlaceResponse } from '../../types';
 import { ProgressBar } from '../../components/ui/feedback/ProgressBar';
@@ -31,6 +32,34 @@ export default function GroupSwipeDeck({
   onViewResultsClick,
   onRetry,
 }: GroupSwipeDeckProps) {
+  const currentPlace = remainingDeck[0] ?? null;
+
+  // Lắng nghe phím mũi tên bàn phím (ArrowLeft = Bỏ qua, ArrowRight = Thích)
+  useEffect(() => {
+    if (!currentPlace || isSwiping) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl instanceof HTMLSelectElement;
+
+      if (isInput) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        void onSwipe(currentPlace, false);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        void onSwipe(currentPlace, true);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentPlace, isSwiping, onSwipe]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16" aria-live="polite">
@@ -56,8 +85,6 @@ export default function GroupSwipeDeck({
       </Alert>
     );
   }
-
-  const currentPlace = remainingDeck[0] ?? null;
 
   return (
     <section aria-label="Bộ bài quẹt thẻ nhóm" className="w-full space-y-6">
