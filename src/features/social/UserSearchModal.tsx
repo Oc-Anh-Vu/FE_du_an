@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import type { UserResponse, UUID } from '../../types';
 import { Avatar } from '../../components/ui/display/Avatar';
+import { Badge } from '../../components/ui/display/Badge';
 import { Button } from '../../components/ui/form/Button';
 import { Modal } from '../../components/ui/feedback/Modal';
 import { SearchInput } from '../../components/ui/form/SearchInput';
@@ -16,6 +17,8 @@ export interface UserSearchModalProps {
   searchUsers: (query: string) => Promise<UserResponse[]>;
   onSendRequest: (userId: UUID) => Promise<boolean | void>;
   currentUserId?: UUID;
+  existingFriendIds?: Set<string> | string[];
+  existingOutgoingRequestIds?: Set<string> | string[];
   isSearchForbidden?: boolean;
 }
 
@@ -33,6 +36,8 @@ export default function UserSearchModal({
   searchUsers,
   onSendRequest,
   currentUserId,
+  existingFriendIds,
+  existingOutgoingRequestIds,
   isSearchForbidden = false,
 }: UserSearchModalProps) {
   const [query, setQuery] = useState('');
@@ -45,6 +50,18 @@ export default function UserSearchModal({
   const [requestError, setRequestError] = useState<string | null>(null);
   const searchSequence = useRef(0);
   const requestInProgress = useRef(false);
+
+  const friendIdSet = useMemo(() => {
+    if (!existingFriendIds) return new Set<string>();
+    return existingFriendIds instanceof Set ? existingFriendIds : new Set(existingFriendIds);
+  }, [existingFriendIds]);
+
+  const outgoingIdSet = useMemo(() => {
+    if (!existingOutgoingRequestIds) return new Set<string>();
+    return existingOutgoingRequestIds instanceof Set
+      ? existingOutgoingRequestIds
+      : new Set(existingOutgoingRequestIds);
+  }, [existingOutgoingRequestIds]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -204,7 +221,8 @@ export default function UserSearchModal({
             {users.map((user) => {
               const isSelf = Boolean(currentUserId && user.id === currentUserId);
               const isAdminAccount = isAdmin(user);
-              const isSent = sentUserIds.has(user.id);
+              const isFriend = friendIdSet.has(user.id);
+              const isRequested = outgoingIdSet.has(user.id) || sentUserIds.has(user.id);
               const isSending = sendingUserId === user.id;
 
               return (
@@ -235,17 +253,33 @@ export default function UserSearchModal({
                     </div>
                   </div>
 
-                  <Button
-                    size="sm"
-                    variant={isSent ? 'outline' : 'primary'}
-                    leftIcon={!isSent ? <UserPlus aria-hidden="true" size={16} /> : undefined}
-                    disabled={isSelf || isAdminAccount || isSent || sendingUserId !== null}
-                    loading={isSending}
-                    loadingText="Đang gửi..."
-                    onClick={() => void handleSendRequest(user.id)}
-                  >
-                    {isSent ? 'Đã gửi' : 'Kết bạn'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {isSelf ? (
+                      <Badge variant="default" size="sm">
+                        Bạn
+                      </Badge>
+                    ) : isFriend ? (
+                      <Badge variant="success" size="sm">
+                        Bạn bè
+                      </Badge>
+                    ) : isRequested ? (
+                      <Badge variant="info" size="sm">
+                        Đã gửi lời mời
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        leftIcon={<UserPlus aria-hidden="true" size={16} />}
+                        disabled={isAdminAccount || sendingUserId !== null}
+                        loading={isSending}
+                        loadingText="Đang gửi..."
+                        onClick={() => void handleSendRequest(user.id)}
+                      >
+                        Kết bạn
+                      </Button>
+                    )}
+                  </div>
                 </li>
               );
             })}
