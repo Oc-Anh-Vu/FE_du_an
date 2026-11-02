@@ -50,6 +50,7 @@ export default function UserSearchModal({
   const [requestError, setRequestError] = useState<string | null>(null);
   const searchSequence = useRef(0);
   const requestInProgress = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const friendIdSet = useMemo(() => {
     if (!existingFriendIds) return new Set<string>();
@@ -139,12 +140,14 @@ export default function UserSearchModal({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      initialFocusRef={searchInputRef}
       title="Tìm kiếm & Kết bạn"
       description="Tìm bạn bằng tên tài khoản hoặc dán trực tiếp mã định danh UUID."
       size="md"
     >
       <form className="space-y-4" onSubmit={(event) => void handleSearch(event)}>
         <SearchInput
+          ref={searchInputRef}
           label="Tên tài khoản hoặc mã UUID"
           placeholder="Nhập username hoặc UUID (ví dụ: a1b2c3d4-...)"
           value={query}
