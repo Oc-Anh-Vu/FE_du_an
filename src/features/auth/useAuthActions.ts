@@ -12,6 +12,7 @@ import {
   type ApiError,
   type AuthenticationRequest,
   type ResetPasswordRequest,
+  type TagResponse,
   type UserCreationRequest,
   type UserResponse,
   type UserTagResponse,
@@ -47,6 +48,8 @@ export interface UseAuthActionsReturn {
     tagId: UUID,
     options?: ManagePersonalTagOptions,
   ) => Promise<UserTagResponse | null>;
+  fetchSystemTags: () => Promise<TagResponse[]>;
+  fetchMyTags: () => Promise<UserTagResponse[]>;
 }
 
 function validationError(code: number, message: string): ApiError {
@@ -238,6 +241,24 @@ export function useAuthActions(): UseAuthActionsReturn {
     [run],
   );
 
+  const fetchSystemTags = useCallback(async (): Promise<TagResponse[]> => {
+    try {
+      return await tagService.getAllTags();
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const fetchMyTags = useCallback(async (): Promise<UserTagResponse[]> => {
+    try {
+      const tags = await tagService.getUserTags();
+      useUserStore.getState().setMyTags(tags);
+      return tags;
+    } catch {
+      return [];
+    }
+  }, []);
+
   return {
     isSubmitting,
     error,
@@ -251,6 +272,8 @@ export function useAuthActions(): UseAuthActionsReturn {
     confirmPasswordReset,
     updateProfileAndBank,
     managePersonalTag,
+    fetchSystemTags,
+    fetchMyTags,
   };
 }
 
