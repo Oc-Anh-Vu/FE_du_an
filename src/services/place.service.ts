@@ -16,11 +16,15 @@ export function buildPlaceFilterParams(params?: PlaceFilterParams): PlaceFilterP
   const trimmedName = params.name?.trim();
   const trimmedCategory = params.category?.trim();
 
-  if (typeof params.latitude === 'number' && typeof params.longitude === 'number') {
+  if (
+    typeof params.latitude === 'number' &&
+    typeof params.longitude === 'number' &&
+    typeof params.radius === 'number'
+  ) {
     return {
       latitude: params.latitude,
       longitude: params.longitude,
-      radius: params.radius ?? 5.0,
+      radius: params.radius,
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
     };
   }

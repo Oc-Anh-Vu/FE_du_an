@@ -14,8 +14,9 @@ import {
 } from '../types';
 
 export const AUTH_STORAGE_KEY = 'hnag-auth-storage';
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
 export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:8080';
+  configuredApiBaseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
 const DEFAULT_TIMEOUT_MS = 15000;
 
 const PUBLIC_AUTH_ENDPOINTS = [

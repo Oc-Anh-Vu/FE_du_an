@@ -27,5 +27,3 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hnaj-frontend:latest
-          build-args: |
-            VITE_API_BASE_URL=/api

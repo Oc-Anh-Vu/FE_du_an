@@ -233,7 +233,7 @@ export interface UserResponse {
 export interface PlaceCreationRequest {
   name: string;
   category?: string | null;
-  priceRange?: PriceRange | number | null;
+  priceRange?: PriceRange | null;
   imageUrl?: string | null;
   address?: string | null;
   latitude: number;
@@ -262,7 +262,7 @@ export interface PlaceResponse {
   id: UUID;
   name: string;
   category: string | null;
-  priceRange: PriceRange | number | null;
+  priceRange: PriceRange | null;
   imageUrl: string | null;
   address: string | null;
   latitude: number;
@@ -321,9 +321,9 @@ export interface RoomResponse {
   roomCode: string;
   host: UserResponse;
   status: RoomStatus;
-  roomType?: RoomType;
-  maxMembers?: number;
-  currentMembers?: number;
+  roomType: RoomType;
+  maxMembers: number;
+  currentMembers: number;
   matchedPlace: PlaceResponse | null;
   latitude: number | null;
   longitude: number | null;
