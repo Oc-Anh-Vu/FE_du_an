@@ -8,3 +8,4 @@ export * from './friendship.service';
 export * from './room.service';
 export * from './swipe.service';
 export * from './expense.service';
+export * from './matchmaking.service';
