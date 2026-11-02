@@ -1,11 +1,12 @@
 // Màn hình Phòng chờ tập hợp thành viên & Khởi tạo phiên quẹt thẻ
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
-import type { UUID } from '../../../types';
+import { ArrowLeft, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import type { MemberLeftSocketData, RoomSocketEvent, UUID } from '../../../types';
 import { useRoomActions } from '../../../features/room/useRoomActions';
 import { useUserStore } from '../../../store/userStore';
 import { useUIStore } from '../../../store/uiStore';
+import { useSocket } from '../../../hooks/useSocket';
 import RoomCodeCard from '../../../features/room/RoomCodeCard';
 import RoomMemberList from '../../../features/room/RoomMemberList';
 import RoomHostControls from '../../../features/room/RoomHostControls';
@@ -35,6 +36,7 @@ export default function Lobby() {
     leaveCurrentRoom,
     closeCurrentRoom,
     deleteCurrentRoom,
+    handleRoomSocketEvent,
   } = useRoomActions();
 
   const [isActionBusy, setIsActionBusy] = useState(false);
@@ -73,17 +75,41 @@ export default function Lobby() {
     void syncRoomState();
   }, [syncRoomState]);
 
-  // Polling định kỳ mỗi 3000ms khi phòng đang OPEN
-  useEffect(() => {
-    if (!roomId) return;
-    const interval = setInterval(() => {
-      void syncRoomState();
-    }, 3000);
+  // Tiếp nhận sự kiện thời gian thực từ STOMP Broker (/topic/rooms/{roomId})
+  const handleSocketMessage = useCallback(
+    (event: RoomSocketEvent) => {
+      if (!event || !event.type) return;
 
-    return () => {
-      clearInterval(interval);
-    };
-  }, [roomId, syncRoomState]);
+      // Cập nhật state thông qua Feature Hook
+      handleRoomSocketEvent(event);
+
+      if (event.type === 'GAME_STARTED' && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        showToast('info', 'Chủ phòng đã bấm bắt đầu! Đang chuyển vào bàn quẹt thẻ...');
+        navigate(`/app/room/${roomId}/swipe`, { replace: true });
+      } else if (event.type === 'ROOM_CLOSED' && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        showToast('warning', 'Phòng ăn đã được đóng.');
+        navigate(`/app/room/${roomId}/summary`, { replace: true });
+      } else if (event.type === 'MEMBER_LEFT') {
+        const leftData = event.data as MemberLeftSocketData;
+        if (leftData?.user?.id === currentUser?.id && !hasRedirectedRef.current) {
+          hasRedirectedRef.current = true;
+          showToast('warning', 'Bạn đã được mời ra khỏi phòng ăn.');
+          navigate('/app/room', { replace: true });
+        }
+      }
+    },
+    [handleRoomSocketEvent, roomId, currentUser?.id, navigate, showToast],
+  );
+
+  // Kích hoạt Hybrid Socket: Lắng nghe STOMP Realtime, tự động kích hoạt Polling (3000ms) làm fallback an toàn
+  const { isConnected } = useSocket<RoomSocketEvent>({
+    roomId,
+    onMessage: handleSocketMessage,
+    onPoll: syncRoomState,
+    pollIntervalMs: 3000,
+  });
 
   // Thao tác Bắt đầu quẹt thẻ (Host)
   const handleStartSwiping = useCallback(async () => {
@@ -196,6 +222,17 @@ export default function Lobby() {
         subtitle={`Chủ phòng: ${currentRoom.host.username} • Sĩ số: ${membersList.length} người`}
         action={
           <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold ${
+                isConnected
+                  ? 'bg-success-soft text-success-soft-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+              title={isConnected ? 'Đang kết nối thời gian thực (Realtime Active)' : 'Đang đồng bộ thích ứng (Fallback Polling)'}
+            >
+              {isConnected ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+              {isConnected ? 'Realtime' : 'Đồng bộ'}
+            </span>
             <Button
               variant="ghost"
               size="sm"
