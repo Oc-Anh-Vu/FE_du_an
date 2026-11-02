@@ -23,13 +23,17 @@ const VIEW_OPTIONS: SegmentOption[] = [
 ];
 
 export interface PlaceCatalogViewProps {
+  mode?: CatalogMode;
   initialMode?: CatalogMode;
+  onModeChange?: (mode: CatalogMode) => void;
   actions?: UsePlaceActionsReturn;
   className?: string;
 }
 
 export function PlaceCatalogView({
+  mode: controlledMode,
   initialMode = 'list',
+  onModeChange,
   actions: customActions,
   className,
 }: PlaceCatalogViewProps) {
@@ -38,7 +42,16 @@ export function PlaceCatalogView({
 
   const { coordinates, hasCoordinates, isRequesting, requestLocation } = useGeolocation();
 
-  const [mode, setMode] = useState<CatalogMode>(initialMode);
+  const [uncontrolledMode, setUncontrolledMode] = useState<CatalogMode>(initialMode);
+  const isControlled = controlledMode !== undefined;
+  const mode = isControlled ? controlledMode : uncontrolledMode;
+
+  const handleModeChange = (newMode: CatalogMode) => {
+    if (!isControlled) {
+      setUncontrolledMode(newMode);
+    }
+    onModeChange?.(newMode);
+  };
 
   const {
     filters,
@@ -130,7 +143,7 @@ export function PlaceCatalogView({
             options={VIEW_OPTIONS}
             value={mode}
             aria-label="Chế độ hiển thị địa điểm"
-            onValueChange={(val) => setMode(val as CatalogMode)}
+            onValueChange={(val) => handleModeChange(val as CatalogMode)}
           />
         </div>
       </div>

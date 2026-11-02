@@ -15,7 +15,8 @@ export interface SoloSwipeDeckProps {
   currentIndex: number;
   userCoordinates?: GeoCoordinates | null;
   isLoading?: boolean;
-  onLike: (place: PlaceResponse) => void;
+  onLike?: (place: PlaceResponse) => void;
+  onMatch?: (place: PlaceResponse) => void;
   onSkip: () => void;
   onReset: () => void;
   className?: string;
@@ -27,6 +28,7 @@ export function SoloSwipeDeck({
   userCoordinates,
   isLoading = false,
   onLike,
+  onMatch,
   onSkip,
   onReset,
   className,
@@ -88,6 +90,11 @@ export function SoloSwipeDeck({
     longitude: currentPlace.longitude,
   });
 
+  const handleLike = () => {
+    onLike?.(currentPlace);
+    onMatch?.(currentPlace);
+  };
+
   return (
     <div className={cn('mx-auto flex max-w-lg flex-col items-center gap-4', className)}>
       {/* Thanh tiến độ */}
@@ -126,7 +133,7 @@ export function SoloSwipeDeck({
           fullWidth
           className="h-14 font-bold text-body-lg shadow-cta"
           leftIcon={<Heart aria-hidden="true" size={22} className="fill-current" />}
-          onClick={() => onLike(currentPlace)}
+          onClick={handleLike}
           aria-label={`Thích quán ${currentPlace.name}`}
         >
           Thích quán này
