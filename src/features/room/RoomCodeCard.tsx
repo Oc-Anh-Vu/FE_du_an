@@ -1,32 +1,69 @@
-import { Card, CopyableCode } from "../../components/ui";
+import { Layers, MapPin, Share2 } from 'lucide-react';
+import { Card } from '../../components/ui/display/Card';
+import { CopyableCode } from '../../components/ui/display/CopyableCode';
+import { Badge } from '../../components/ui/display/Badge';
 
 export interface RoomCodeCardProps {
   roomCode: string;
   roomName?: string | null;
+  radius?: number | null;
+  deckSize?: number | null;
+  status?: string;
 }
 
-export default function RoomCodeCard({ roomCode, roomName }: RoomCodeCardProps) {
+export default function RoomCodeCard({
+  roomCode,
+  roomName,
+  radius,
+  deckSize,
+  status,
+}: RoomCodeCardProps) {
   return (
     <Card
       as="section"
-      variant="dark"
-      padding="lg"
-      className="rounded-section text-center"
-      aria-label="Thông tin mã phòng"
+      className="rounded-card border border-border bg-card p-6 text-center shadow-card"
+      aria-label="Thông tin mã phòng ăn"
     >
-      <p className="text-caption font-bold uppercase tracking-widest text-surface-dark-foreground/70">
-        {roomName || "Chia sẻ phòng ăn"}
-      </p>
-      <h2 className="mt-2 text-heading-sm font-semibold text-surface-dark-foreground">
-        Mời bạn bè tham gia
+      <div className="flex items-center justify-center gap-2 text-caption font-bold uppercase tracking-wider text-primary">
+        <Share2 size={16} />
+        <span>Mã phòng ăn</span>
+        {status && (
+          <Badge variant={status === 'SWIPING' ? 'success' : 'info'} size="sm">
+            {status === 'SWIPING' ? 'Đang quẹt thẻ' : 'Phòng chờ'}
+          </Badge>
+        )}
+      </div>
+
+      <h2 className="mt-2 text-heading-sm font-bold text-foreground">
+        {roomName || 'Mời bạn bè cùng tham gia'}
       </h2>
-      <div className="mt-5">
+      <p className="mt-1 text-body-sm text-muted-foreground">
+        Chia sẻ mã 6 ký tự này để bạn bè nhập vào mục &quot;Tham gia phòng&quot;
+      </p>
+
+      <div className="my-5 flex justify-center">
         <CopyableCode
           code={roomCode}
-          label="Mã phòng · nhấn để sao chép"
-          className="text-surface-dark-foreground [&>span:first-child]:text-surface-dark-foreground/70 [&>span:nth-child(2)]:border-surface-dark-foreground/20 [&>span:nth-child(2)]:bg-surface-dark-foreground/10 [&>span:nth-child(2)]:hover:bg-surface-dark-foreground/20 [&>span:nth-child(2)>span:first-child]:text-heading [&>span:nth-child(2)>span:first-child]:text-surface-dark-foreground [&>span:last-child]:text-surface-dark-foreground"
+          label="Nhấn để sao chép mã phòng"
         />
       </div>
+
+      {(radius !== undefined || deckSize !== undefined) && (
+        <div className="flex flex-wrap items-center justify-center gap-4 border-t border-border pt-4 text-body-sm text-muted-foreground">
+          {radius !== undefined && radius !== null && (
+            <div className="flex items-center gap-1.5">
+              <MapPin size={15} className="text-primary" />
+              <span>Bán kính: <strong className="text-foreground">{radius} km</strong></span>
+            </div>
+          )}
+          {deckSize !== undefined && deckSize !== null && (
+            <div className="flex items-center gap-1.5">
+              <Layers size={15} className="text-primary" />
+              <span>Số lượng: <strong className="text-foreground">{deckSize} quán</strong></span>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
