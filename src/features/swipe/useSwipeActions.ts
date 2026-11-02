@@ -1,16 +1,25 @@
 import { useCallback, useMemo, useState } from 'react';
 import type {
+  MatchFoundSocketData,
   PlaceResponse,
   RoomPlaceResultResponse,
   RoomResponse,
+  RoomSocketEvent,
+  SwipeActionSocketData,
   UUID,
   UserSwipeHistoryItem,
 } from '../../types';
-import { ApiErrorCode } from '../../types';
+import { ApiErrorCode, RoomStatus } from '../../types';
 import { roomService } from '../../services/room.service';
 import { swipeService } from '../../services/swipe.service';
 import { useRoomStore } from '../../store/roomStore';
 import { useUIStore } from '../../store/uiStore';
+
+export interface SwipeReactionEvent {
+  userId: string;
+  username: string;
+  direction: 'RIGHT' | 'LEFT';
+}
 
 export interface UseSwipeActionsReturn {
   roomDeck: PlaceResponse[];
@@ -19,6 +28,7 @@ export interface UseSwipeActionsReturn {
   swipeResults: RoomPlaceResultResponse[];
   currentRoom: RoomResponse | null;
   progressPercentage: number;
+  lastSwipeReaction: SwipeReactionEvent | null;
   isInitializing: boolean;
   isSwiping: boolean;
   isSelectingPlace: boolean;
@@ -27,6 +37,7 @@ export interface UseSwipeActionsReturn {
   submitSwipeDecision: (roomId: UUID, place: PlaceResponse, liked: boolean) => Promise<boolean>;
   fetchRoomResults: (roomId: UUID) => Promise<RoomPlaceResultResponse[]>;
   hostSelectWinningPlace: (roomId: UUID, placeId: UUID) => Promise<boolean>;
+  handleSwipeSocketEvent: (event: RoomSocketEvent) => void;
   clearError: () => void;
 }
 
@@ -70,6 +81,7 @@ export function useSwipeActions(): UseSwipeActionsReturn {
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
   const [isSwiping, setIsSwiping] = useState<boolean>(false);
   const [isSelectingPlace, setIsSelectingPlace] = useState<boolean>(false);
+  const [lastSwipeReaction, setLastSwipeReaction] = useState<SwipeReactionEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /** Mảng các ID quán đã quẹt */
@@ -97,32 +109,20 @@ export function useSwipeActions(): UseSwipeActionsReturn {
       setIsInitializing(true);
       setError(null);
       try {
-        // Lấy bộ bài hoặc tạo mới nếu chưa có
-        let deck: PlaceResponse[] = [];
-        try {
-          deck = await roomService.getDeck(roomId);
-        } catch {
-          deck = [];
-        }
-
-        if (!Array.isArray(deck) || deck.length === 0) {
+        let deck = await roomService.getRoomDeck(roomId);
+        if (!deck || deck.length === 0) {
           deck = await roomService.generateDeck(roomId);
         }
+        setRoomDeck(deck);
 
-        const [history, roomDetails] = await Promise.all([
-          swipeService.getMySwipesInRoom(roomId).catch(() => []),
-          roomService.getRoomDetails(roomId).catch(() => null),
-        ]);
+        const myHistory = await swipeService.getMySwipesInRoom(roomId);
+        setMySwipes(myHistory);
 
-        setRoomDeck(Array.isArray(deck) ? deck : []);
-        setMySwipes(Array.isArray(history) ? history : []);
-        if (roomDetails) {
-          setCurrentRoom(roomDetails);
-        }
+        const roomDetails = await roomService.getRoomDetails(roomId);
+        setCurrentRoom(roomDetails);
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể tải bộ bài quẹt của phòng.');
+        const message = getErrorMessage(err, 'Không thể tải bộ bài phòng ăn.');
         setError(message);
-        useUIStore.getState().showToast('danger', message);
       } finally {
         setIsInitializing(false);
       }
@@ -130,55 +130,34 @@ export function useSwipeActions(): UseSwipeActionsReturn {
     [setCurrentRoom, setMySwipes, setRoomDeck],
   );
 
-  /** Gửi quyết định quẹt thẻ (Thích hoặc Bỏ qua) */
+  /** Gửi quyết định quẹt thích/không thích một quán ăn */
   const submitSwipeDecision = useCallback(
     async (roomId: UUID, place: PlaceResponse, liked: boolean): Promise<boolean> => {
       setIsSwiping(true);
       setError(null);
 
+      // Thêm ngay vào state tạm để chuyển sang thẻ bài tiếp theo
+      addMySwipe({
+        placeId: place.id,
+        placeName: place.name,
+        liked,
+      });
+
       try {
-        try {
-          await swipeService.swipe({
-            roomId,
-            placeId: place.id,
-            liked,
-          });
-        } catch (swipeErr) {
-          // Bỏ qua mã lỗi 2014 (ALREADY_SWIPED) vì lượt quẹt đã được lưu
-          const code =
-            swipeErr && typeof swipeErr === 'object' && 'code' in swipeErr
-              ? (swipeErr as { code: number }).code
-              : undefined;
-
-          if (code !== ApiErrorCode.ALREADY_SWIPED) {
-            throw swipeErr;
-          }
-        }
-
-        // Cập nhật lượt quẹt vào state người dùng
-        addMySwipe({
+        await swipeService.swipe({
+          roomId,
           placeId: place.id,
-          placeName: place.name,
           liked,
         });
 
-        // Tự động đồng bộ lại chi tiết phòng ngầm để kiểm tra matchedPlace
-        try {
-          const updatedRoom = await roomService.getRoomDetails(roomId);
-          setCurrentRoom(updatedRoom);
-
-          if (updatedRoom.matchedPlace) {
-            useUIStore
-              .getState()
-              .showToast('success', `Nhóm đã tìm thấy quán ăn trùng khớp: ${updatedRoom.matchedPlace.name}!`);
-          }
-        } catch {
-          // Bỏ qua lỗi ngầm khi làm mới phòng
-        }
-
         return true;
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể lưu lượt quẹt của bạn. Vui lòng thử lại.');
+        const errObj = err as { code?: number } | undefined;
+        if (errObj?.code === ApiErrorCode.ALREADY_SWIPED) {
+          return true;
+        }
+
+        const message = getErrorMessage(err, 'Không thể ghi nhận lượt quẹt thẻ.');
         setError(message);
         useUIStore.getState().showToast('danger', message);
         return false;
@@ -186,7 +165,7 @@ export function useSwipeActions(): UseSwipeActionsReturn {
         setIsSwiping(false);
       }
     },
-    [addMySwipe, setCurrentRoom],
+    [addMySwipe],
   );
 
   /** Lấy bảng xếp hạng kết quả bình chọn của phòng */
@@ -235,6 +214,36 @@ export function useSwipeActions(): UseSwipeActionsReturn {
     [setCurrentRoom],
   );
 
+  /** Xử lý sự kiện nhận được từ WebSocket STOMP */
+  const handleSwipeSocketEvent = useCallback((event: RoomSocketEvent) => {
+    if (!event || !event.type) return;
+
+    switch (event.type) {
+      case 'SWIPE_ACTION': {
+        const data = event.data as SwipeActionSocketData;
+        if (data && data.direction) {
+          setLastSwipeReaction({
+            userId: data.userId,
+            username: data.username || 'Một thành viên',
+            direction: data.direction,
+          });
+        }
+        break;
+      }
+      case 'MATCH_FOUND': {
+        const data = event.data as MatchFoundSocketData;
+        if (data?.matchedPlace) {
+          useRoomStore.getState().setRoomMatchedPlace(data.matchedPlace);
+        }
+        break;
+      }
+      case 'ROOM_CLOSED': {
+        useRoomStore.getState().updateCurrentRoomStatus(RoomStatus.CLOSED);
+        break;
+      }
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -246,6 +255,7 @@ export function useSwipeActions(): UseSwipeActionsReturn {
     swipeResults,
     currentRoom,
     progressPercentage,
+    lastSwipeReaction,
     isInitializing,
     isSwiping,
     isSelectingPlace,
@@ -254,6 +264,7 @@ export function useSwipeActions(): UseSwipeActionsReturn {
     submitSwipeDecision,
     fetchRoomResults,
     hostSelectWinningPlace,
+    handleSwipeSocketEvent,
     clearError,
   };
 }
