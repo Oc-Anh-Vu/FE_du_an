@@ -46,6 +46,7 @@ export interface UseMatchmakingActionsReturn {
     longitude: number,
     radius?: number,
   ) => Promise<PublicRoomResponse[]>;
+  handleMatchmakingSocketEvent: (payload: MatchmakingStatusResponse) => void;
   clearMatchmakingState: () => void;
 }
 
@@ -98,86 +99,60 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
       const tags = await tagService.getAllTags();
       setSystemTags(Array.isArray(tags) ? tags : []);
 
-      // Khởi tạo các tag tạm thời đã có trong store của người dùng
-      const existingMyTags = useUserStore.getState().myTags;
-      const temporaryTagIds = existingMyTags
-        .filter((userTag) => userTag.temporary)
-        .map((userTag) => userTag.tag.id)
-        .slice(0, MAX_MOOD_TAGS);
-
-      if (temporaryTagIds.length > 0) {
-        setSelectedTagIds(temporaryTagIds);
-      }
+      // Đọc các tag tạm thời hiện tại của user
+      const myTags = useUserStore.getState().myTags;
+      const temporaryTagIds = myTags.filter((t) => t.temporary).map((t) => t.tag.id);
+      setSelectedTagIds(temporaryTagIds.slice(0, MAX_MOOD_TAGS));
     } catch (err) {
-      const message = getErrorMessage(err, 'Không thể tải danh sách tag tâm trạng từ hệ thống.');
+      const message = getErrorMessage(err, 'Không thể tải danh sách sở thích ẩm thực.');
       setError(message);
     } finally {
       setIsLoadingTags(false);
     }
   }, []);
 
-  /** Chọn hoặc bỏ chọn tag tâm trạng (tối đa 2 tag) */
+  /** Chọn hoặc bỏ chọn một tag tâm trạng (tối đa 2 tag) */
   const toggleMoodTag = useCallback((tagId: UUID) => {
     setSelectedTagIds((prev) => {
       if (prev.includes(tagId)) {
         return prev.filter((id) => id !== tagId);
       }
-
       if (prev.length >= MAX_MOOD_TAGS) {
-        useUIStore
-          .getState()
-          .showToast('warning', `Bạn chỉ được chọn tối đa ${MAX_MOOD_TAGS} tag tâm trạng!`);
+        useUIStore.getState().showToast('warning', `Bạn chỉ có thể chọn tối đa ${MAX_MOOD_TAGS} tâm trạng ẩm thực.`);
         return prev;
       }
-
       return [...prev, tagId];
     });
   }, []);
 
-  /** Lưu các tag tâm trạng tạm thời đã chọn lên server và cập nhật userStore */
+  /** Xóa toàn bộ lựa chọn */
+  const clearSelection = useCallback(() => {
+    setSelectedTagIds([]);
+  }, []);
+
+  /** Gửi các tag tâm trạng đã chọn lên server dưới dạng tag tạm thời */
   const submitTemporaryMoodTags = useCallback(async (): Promise<boolean> => {
     if (selectedTagIds.length === 0) {
-      useUIStore.getState().showToast('warning', 'Vui lòng chọn ít nhất 1 tag tâm trạng hôm nay.');
+      useUIStore.getState().showToast('warning', 'Vui lòng chọn ít nhất 1 tâm trạng ẩm thực hôm nay.');
       return false;
     }
 
     setIsSubmitting(true);
     setError(null);
-
     try {
-      // 1. Dọn dẹp các tag tạm thời cũ không còn nằm trong danh sách chọn
-      const currentMyTags = useUserStore.getState().myTags;
-      const oldTemporaryTags = currentMyTags.filter(
-        (ut) => ut.temporary && !selectedTagIds.includes(ut.tag.id),
-      );
-
-      for (const oldTag of oldTemporaryTags) {
-        try {
-          await tagService.removeUserTag(oldTag.tag.id);
-          useUserStore.getState().removeMyTag(oldTag.tag.id);
-        } catch {
-          // Bỏ qua nếu tag đã được dọn trước đó
-        }
-      }
-
-      // 2. Lưu từng tag tạm thời (temporary = true)
+      // Gắn lần lượt các tag đã chọn với temporary=true
       for (const tagId of selectedTagIds) {
-        const savedUserTag = await tagService.addUserTag(tagId, true);
-        useUserStore.getState().upsertMyTag(savedUserTag);
+        await tagService.addUserTag(tagId, true);
       }
 
-      // 3. Đồng bộ lại toàn bộ tags người dùng
-      try {
-        const refreshedUserTags = await tagService.getUserTags();
-        useUserStore.getState().setMyTags(refreshedUserTags);
-      } catch {
-        // Bỏ qua nếu việc tải lại nền thất bại
-      }
+      // Cập nhật lại store
+      const updatedTags = await tagService.getMyTags();
+      useUserStore.getState().setMyTags(updatedTags);
 
-      useUIStore.getState().showToast('success', 'Đã lưu tâm trạng ăn uống hôm nay!');
+      useUIStore.getState().showToast('success', 'Đã cập nhật tâm trạng ăn uống hôm nay!');
       return true;
     } catch (err) {
-      const message = getErrorMessage(err, 'Không thể lưu tag tâm trạng. Vui lòng thử lại.');
+      const message = getErrorMessage(err, 'Không thể lưu tâm trạng ẩm thực.');
       setError(message);
       useUIStore.getState().showToast('danger', message);
       return false;
@@ -186,71 +161,35 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     }
   }, [selectedTagIds]);
 
-  const clearSelection = useCallback(() => {
-    setSelectedTagIds([]);
-  }, []);
-
-  /** Bắt đầu quét radar hoặc đưa vào hàng đợi Redis */
+  /** Đưa người dùng vào hàng đợi Radar tìm phòng ghép */
   const startMatchmaking = useCallback(
     async (request: MatchmakingRequest): Promise<MatchmakingStatusResponse | null> => {
-      setIsSubmitting(true);
+      setIsQueueing(true);
       setError(null);
       try {
-        const res = await matchmakingService.findOrQueueMatch(request);
-        setMatchmakingStatus(res);
-        setIsQueueing(res.status === 'WAITING');
-        if (res.status === 'MATCHED') {
-          useUIStore.getState().showToast('success', 'Đã tìm thấy phòng ghép phù hợp!');
-        }
-        return res;
+        const response = await matchmakingService.findOrQueueMatch(request);
+        setMatchmakingStatus(response);
+        return response;
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể bắt đầu ghép phòng lúc này.');
+        const message = getErrorMessage(err, 'Không thể tham gia hàng đợi ghép phòng lúc này.');
         setError(message);
         useUIStore.getState().showToast('danger', message);
+        setIsQueueing(false);
         return null;
-      } finally {
-        setIsSubmitting(false);
       }
     },
     [],
   );
 
-  /** Lấy trạng thái ghép mới nhất từ Backend (1 lần) */
+  /** Kiểm tra một lần trạng thái hàng đợi */
   const pollMatchStatus = useCallback(async (): Promise<MatchmakingStatusResponse | null> => {
-    if (isPollingInFlightRef.current) {
-      return null;
-    }
+    if (isPollingInFlightRef.current) return null;
     isPollingInFlightRef.current = true;
     try {
-      const res = await matchmakingService.getMatchStatus();
-      setMatchmakingStatus(res);
-
-      if (res.status === 'MATCHED') {
-        setIsQueueing(false);
-        if (pollingTimerRef.current) {
-          clearInterval(pollingTimerRef.current);
-          pollingTimerRef.current = null;
-        }
-        setIsPolling(false);
-        useUIStore.getState().showToast('success', 'Đã tìm thấy phòng ghép!');
-        if (onMatchedRef.current && res.roomCode) {
-          onMatchedRef.current(res.roomCode, res.roomId ?? undefined);
-        }
-      } else if (res.status === 'CANCELLED' || res.status === 'TIMEOUT') {
-        setIsQueueing(false);
-        if (pollingTimerRef.current) {
-          clearInterval(pollingTimerRef.current);
-          pollingTimerRef.current = null;
-        }
-        setIsPolling(false);
-      } else {
-        setIsQueueing(true);
-      }
-      return res;
-    } catch (err) {
-      // Polling thất bại không ném lỗi lớn gây sập UI
-      const message = getErrorMessage(err, 'Lỗi kiểm tra trạng thái hàng đợi.');
-      setError(message);
+      const status = await matchmakingService.getMatchStatus();
+      setMatchmakingStatus(status);
+      return status;
+    } catch {
       return null;
     } finally {
       isPollingInFlightRef.current = false;
@@ -266,36 +205,43 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     setIsPolling(false);
   }, []);
 
-  /** Bắt đầu Polling định kỳ kiểm tra trạng thái ghép phòng */
+  /** Bắt đầu Polling định kỳ kiểm tra trạng thái hàng đợi */
   const startPollingStatus = useCallback(
-    (
-      onMatched?: (roomCode: string, roomId?: string) => void,
-      intervalMs: number = DEFAULT_POLL_INTERVAL_MS,
-    ) => {
-      onMatchedRef.current = onMatched;
+    (onMatched?: (roomCode: string, roomId?: string) => void, intervalMs = DEFAULT_POLL_INTERVAL_MS) => {
       stopPollingStatus();
+      onMatchedRef.current = onMatched;
       setIsPolling(true);
 
-      // Gọi ngay lượt đầu
-      void pollMatchStatus();
+      const check = async () => {
+        const result = await pollMatchStatus();
+        if (result && result.status === 'MATCHED') {
+          stopPollingStatus();
+          setIsQueueing(false);
+          if (onMatchedRef.current && result.roomCode) {
+            onMatchedRef.current(result.roomCode, result.roomId ?? undefined);
+          }
+        }
+      };
 
-      // Thiết lập chu kỳ Polling
+      // Chạy ngay lượt đầu
+      void check();
+      // Khởi tạo interval
       pollingTimerRef.current = setInterval(() => {
-        void pollMatchStatus();
+        void check();
       }, intervalMs);
     },
     [pollMatchStatus, stopPollingStatus],
   );
 
-  /** Hủy tìm kiếm ghép phòng */
+  /** Hủy tìm kiếm và rút khỏi hàng đợi */
   const cancelMatchmaking = useCallback(async (): Promise<boolean> => {
-    setIsSubmitting(true);
     stopPollingStatus();
+    setIsSubmitting(true);
+    setError(null);
     try {
       await matchmakingService.cancelMatch();
       setMatchmakingStatus(null);
       setIsQueueing(false);
-      useUIStore.getState().showToast('info', 'Đã hủy tìm kiếm ghép phòng.');
       return true;
     } catch (err) {
       const message = getErrorMessage(err, 'Không thể hủy ghép phòng lúc này.');
@@ -331,6 +277,22 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     [],
   );
 
+  /** Tiếp nhận sự kiện gói tin từ WebSocket STOMP */
+  const handleMatchmakingSocketEvent = useCallback(
+    (payload: MatchmakingStatusResponse) => {
+      if (!payload) return;
+      setMatchmakingStatus(payload);
+      if (payload.status === 'MATCHED') {
+        stopPollingStatus();
+        setIsQueueing(false);
+        if (onMatchedRef.current && payload.roomCode) {
+          onMatchedRef.current(payload.roomCode, payload.roomId ?? undefined);
+        }
+      }
+    },
+    [stopPollingStatus],
+  );
+
   /** Làm sạch toàn bộ trạng thái matchmaking */
   const clearMatchmakingState = useCallback(() => {
     stopPollingStatus();
@@ -361,6 +323,7 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
     stopPollingStatus,
     cancelMatchmaking,
     fetchNearbyPublicRooms,
+    handleMatchmakingSocketEvent,
     clearMatchmakingState,
   };
 }
