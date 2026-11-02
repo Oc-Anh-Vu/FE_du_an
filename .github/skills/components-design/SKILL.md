@@ -1,9 +1,9 @@
 ---
-name: fe-design
+name: components-design
 description: Thiết kế, xây dựng và hiệu chỉnh các React Dumb Components dùng chung trong src/components/ theo DESIGN_SYSTEM.md; phụ trách giao diện, design tokens, khả năng truy cập và responsive; không phụ trách nghiệp vụ, gọi API, store hoặc định tuyến.
 ---
 
-# Skill: `fe-design`
+# Skill: `components-design`
 
 ## 1. Vai trò và mục tiêu
 
