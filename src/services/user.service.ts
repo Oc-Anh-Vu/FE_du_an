@@ -12,8 +12,9 @@ export function createUser(payload: UserCreationRequest): Promise<UserResponse> 
   return apiPost<UserResponse, UserCreationRequest>(USERS_BASE_PATH, payload);
 }
 
-export function getUsers(): Promise<UserResponse[]> {
-  return apiGet<UserResponse[]>(USERS_BASE_PATH);
+export function getUsers(name?: string): Promise<UserResponse[]> {
+  const query = name && name.trim() ? `?name=${encodeURIComponent(name.trim())}` : '';
+  return apiGet<UserResponse[]>(`${USERS_BASE_PATH}${query}`);
 }
 
 export function getUserById(userId: UUID): Promise<UserResponse> {
