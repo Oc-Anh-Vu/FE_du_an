@@ -54,7 +54,8 @@ export default function Match() {
     try {
       // 1. Lưu các tags tâm trạng tạm thời nếu người dùng đã chọn
       if (selectedTagIds.length > 0) {
-        await submitTemporaryMoodTags();
+        const tagsSaved = await submitTemporaryMoodTags();
+        if (!tagsSaved) return;
       }
 
       // 2. Gửi yêu cầu vào hàng đợi Matchmaking

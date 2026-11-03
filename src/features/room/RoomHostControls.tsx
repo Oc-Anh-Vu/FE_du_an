@@ -11,9 +11,9 @@ export interface RoomHostControlsProps {
   room: RoomResponse;
   isHost: boolean;
   onStartClick?: () => Promise<void> | void;
-  onCloseClick?: () => Promise<void> | void;
-  onDeleteClick?: () => Promise<void> | void;
-  onLeaveClick?: () => Promise<void> | void;
+  onCloseClick?: () => Promise<boolean | void> | boolean | void;
+  onDeleteClick?: () => Promise<boolean | void> | boolean | void;
+  onLeaveClick?: () => Promise<boolean | void> | boolean | void;
   isStarting?: boolean;
   isClosing?: boolean;
   isDeleting?: boolean;
@@ -41,12 +41,18 @@ export default function RoomHostControls({
   async function handleConfirmAction() {
     setActionError(null);
     try {
+      let succeeded: boolean | void = undefined;
       if (confirmType === 'close' && onCloseClick) {
-        await onCloseClick();
+        succeeded = await onCloseClick();
       } else if (confirmType === 'delete' && onDeleteClick) {
-        await onDeleteClick();
+        succeeded = await onDeleteClick();
       } else if (confirmType === 'leave' && onLeaveClick) {
-        await onLeaveClick();
+        succeeded = await onLeaveClick();
+      }
+
+      if (succeeded === false) {
+        setActionError('Không thể hoàn tất thao tác. Vui lòng kiểm tra thông báo và thử lại.');
+        return;
       }
       setConfirmType(null);
     } catch (err) {

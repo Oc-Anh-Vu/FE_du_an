@@ -200,7 +200,7 @@ export function useAuthActions(): UseAuthActionsReturn {
     async (userId: UUID, payload: UserUpdateRequest): Promise<UserResponse | null> => {
       setIsForbiddenProfileUpdate(false);
       try {
-        const updated = await run(() => userService.updateMyInfo(payload));
+        const updated = await run(() => userService.updateUser(userId, payload));
         useUserStore.getState().setCurrentUser(updated);
         useUIStore.getState().showToast('success', 'Đã cập nhật hồ sơ thành công.');
         return updated;

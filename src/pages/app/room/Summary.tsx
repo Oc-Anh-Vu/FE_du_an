@@ -21,6 +21,7 @@ import { PageHeader } from '../../../components/layout/PageHeader';
 import { Button } from '../../../components/ui/form/Button';
 import { Modal } from '../../../components/ui/feedback/Modal';
 import { Spinner } from '../../../components/ui/feedback/Spinner';
+import { Alert } from '../../../components/ui/feedback/Alert';
 
 export default function Summary() {
   const { id: roomId } = useParams<{ id: string }>();
@@ -291,7 +292,7 @@ export default function Summary() {
                 </p>
               </div>
 
-              {currentRoom && !hasExpenses && (
+              {currentRoom && !hasExpenses && currentRoom.status === 'CLOSED' ? (
                 <Button
                   variant="primary"
                   size="md"
@@ -300,7 +301,11 @@ export default function Summary() {
                 >
                   Tạo hóa đơn chia tiền
                 </Button>
-              )}
+              ) : currentRoom && !hasExpenses ? (
+                <Alert variant="warning" title="Chưa thể tạo hóa đơn">
+                  Chỉ có thể lập hóa đơn sau khi phiên quẹt đã kết thúc và phòng chuyển sang trạng thái đã đóng.
+                </Alert>
+              ) : null}
             </div>
 
             {/* Danh sách hóa đơn hiện có */}

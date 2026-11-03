@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Compass, Sparkles } from 'lucide-react';
-import type { CreateRoomRequest } from '../../types';
+import { RoomType, type CreateRoomRequest } from '../../types';
 import { Card } from '../../components/ui/display/Card';
 import { Input } from '../../components/ui/form/Input';
 import { Slider } from '../../components/ui/form/Slider';
@@ -25,8 +25,10 @@ export default function CreateRoomForm({
   onCancel,
 }: CreateRoomFormProps) {
   const [name, setName] = useState('');
+  const [roomType, setRoomType] = useState<CreateRoomRequest['roomType']>(RoomType.PRIVATE);
   const [radius, setRadius] = useState(5);
   const [deckSize, setDeckSize] = useState(15);
+  const [maxMembers, setMaxMembers] = useState(10);
   const [coordinates, setCoordinates] = useState<GeoCoordinates | null>(initialCoords);
   const [prevInitialCoords, setPrevInitialCoords] = useState<GeoCoordinates | null>(initialCoords);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -55,6 +57,8 @@ export default function CreateRoomForm({
         longitude: coordinates.longitude,
         radius,
         deckSize,
+        roomType,
+        maxMembers,
       });
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Không thể tạo phòng lúc này.');
@@ -86,6 +90,24 @@ export default function CreateRoomForm({
           disabled={isSubmitting}
         />
 
+        <div className="space-y-1.5">
+          <label htmlFor="room-type" className="block text-body-sm font-semibold text-foreground">
+            Loại phòng
+          </label>
+          <select
+            id="room-type"
+            value={roomType}
+            onChange={(event) =>
+              setRoomType(event.target.value === RoomType.PUBLIC ? RoomType.PUBLIC : RoomType.PRIVATE)
+            }
+            disabled={isSubmitting}
+            className="focus-ring h-11 w-full rounded-control border border-input bg-card px-4 text-body text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value={RoomType.PRIVATE}>Riêng tư</option>
+            <option value={RoomType.PUBLIC}>Công khai</option>
+          </select>
+        </div>
+
         {/* Tọa độ GPS */}
         <div className="space-y-2">
           <label className="flex items-center gap-1.5 text-body-sm font-semibold text-foreground">
@@ -108,9 +130,9 @@ export default function CreateRoomForm({
         {/* Bán kính tìm kiếm */}
         <Slider
           label="Bán kính tìm kiếm quán ăn"
-          min={1}
+          min={0.1}
           max={30}
-          step={1}
+          step={0.1}
           value={radius}
           onValueChange={setRadius}
           formatValue={(val) => `${val} km`}
@@ -120,12 +142,23 @@ export default function CreateRoomForm({
         {/* Số lượng quán quẹt thẻ */}
         <Slider
           label="Số lượng quán trong bộ bài quẹt"
-          min={5}
-          max={30}
+          min={3}
+          max={50}
           step={1}
           value={deckSize}
           onValueChange={setDeckSize}
           formatValue={(val) => `${val} quán`}
+          disabled={isSubmitting}
+        />
+
+        <Slider
+          label="Số lượng thành viên tối đa"
+          min={2}
+          max={20}
+          step={1}
+          value={maxMembers}
+          onValueChange={setMaxMembers}
+          formatValue={(val) => `${val} người`}
           disabled={isSubmitting}
         />
 

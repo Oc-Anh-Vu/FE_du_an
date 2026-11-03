@@ -10,6 +10,7 @@ import { useUserStore } from '../../../store/userStore';
 import { useUIStore } from '../../../store/uiStore';
 import { useSocket } from '../../../hooks/useSocket';
 import GroupSwipeDeck from '../../../features/swipe/GroupSwipeDeck';
+import RoomHostControls from '../../../features/room/RoomHostControls';
 
 import { PageContainer } from '../../../components/layout/PageContainer';
 import { PageHeader } from '../../../components/layout/PageHeader';
@@ -40,9 +41,14 @@ export default function Swipe() {
     handleSwipeSocketEvent,
   } = useSwipeActions(endRoomSession);
 
-  const { fetchRoomDetails } = useRoomActions();
+  const {
+    fetchRoomDetails,
+    isCurrentUserHost,
+    closeCurrentRoom,
+  } = useRoomActions();
   const hasRedirectedRef = useRef(false);
   const [showHearts, setShowHearts] = useState(false);
+  const [isClosingRoom, setIsClosingRoom] = useState(false);
 
   const initializeSession = useCallback(() => {
     if (!roomId || !isSessionActive()) return;
@@ -123,11 +129,26 @@ export default function Swipe() {
   // Xử lý quẹt thẻ
   const handleSwipe = useCallback(
     async (place: PlaceResponse, liked: boolean) => {
-      if (!roomId || !isSessionActive()) return;
-      await submitSwipeDecision(roomId, place, liked);
+      if (!roomId || !isSessionActive()) return false;
+      return submitSwipeDecision(roomId, place, liked);
     },
     [roomId, submitSwipeDecision, isSessionActive],
   );
+
+  const handleCloseRoom = useCallback(async () => {
+    if (!roomId) return false;
+    setIsClosingRoom(true);
+    try {
+      const succeeded = await closeCurrentRoom(roomId);
+      if (succeeded) {
+        hasRedirectedRef.current = true;
+        navigate(`/app/room/${roomId}/summary`, { replace: true });
+      }
+      return succeeded;
+    } finally {
+      setIsClosingRoom(false);
+    }
+  }, [roomId, closeCurrentRoom, navigate]);
 
   const matchedPlace = currentRoom?.matchedPlace;
 
@@ -177,6 +198,15 @@ export default function Swipe() {
           </div>
         }
       />
+
+      {currentRoom && currentRoom.id === roomId && isCurrentUserHost && currentRoom.status !== 'CLOSED' && (
+        <RoomHostControls
+          room={currentRoom}
+          isHost={isCurrentUserHost}
+          onCloseClick={handleCloseRoom}
+          isClosing={isClosingRoom}
+        />
+      )}
 
       {isInitializing ? (
         <div className="py-16 flex flex-col items-center justify-center gap-4">

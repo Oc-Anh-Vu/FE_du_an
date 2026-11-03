@@ -4,7 +4,6 @@ import { cn } from "../../../utils/cn";
 import {
   getBankByBin,
   searchBanks,
-  VIETQR_BANKS,
   type VietQRBank,
 } from "../../../utils/vietqrBanks";
 
@@ -298,4 +297,3 @@ export function BankSelect({
 }
 
 export default BankSelect;
-

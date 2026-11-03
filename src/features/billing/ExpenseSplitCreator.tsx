@@ -42,14 +42,19 @@ export default function ExpenseSplitCreator({
   onCreateExpense,
   onCancel,
 }: ExpenseSplitCreatorProps) {
-  const members = useMemo(() => room.members ?? [], [room.members]);
+  const members = useMemo(
+    () => room.members?.length ? room.members : room.currentMembers === 1 ? [room.host] : [],
+    [room.currentMembers, room.host, room.members],
+  );
+  const hasCompleteMemberList = members.length >= room.currentMembers;
+  const payerOptions = useMemo(() => members.length > 0 ? members : [room.host], [members, room.host]);
 
   const defaultPayerId = useMemo(() => {
-    if (currentUserId && members.some((m) => m.id === currentUserId)) {
+    if (currentUserId && payerOptions.some((m) => m.id === currentUserId)) {
       return currentUserId;
     }
-    return members[0]?.id ?? '';
-  }, [currentUserId, members]);
+    return payerOptions[0]?.id ?? '';
+  }, [currentUserId, payerOptions]);
 
   const [splitType, setSplitType] = useState<SplitType>(SplitType.EVENLY);
   const [payerId, setPayerId] = useState<UUID>(defaultPayerId);
@@ -62,12 +67,17 @@ export default function ExpenseSplitCreator({
   const hasValidTotal = typeof totalAmount === 'number' && totalAmount > 0;
   const isByItemBalanced = splitType === SplitType.EVENLY || (hasValidTotal && difference === 0 && splitTotal > 0);
 
-  const canSubmit = hasValidTotal && Boolean(payerId) && isByItemBalanced && !isSubmitting;
+  const canSubmit =
+    hasValidTotal &&
+    Boolean(payerId) &&
+    isByItemBalanced &&
+    !isSubmitting &&
+    (splitType !== SplitType.BY_ITEM || hasCompleteMemberList);
 
   const evenAmountPerMember = useMemo(() => {
-    if (!hasValidTotal || members.length === 0) return 0;
-    return Math.round((totalAmount ?? 0) / members.length);
-  }, [hasValidTotal, members.length, totalAmount]);
+    if (!hasValidTotal || room.currentMembers === 0) return 0;
+    return Math.round((totalAmount ?? 0) / room.currentMembers);
+  }, [hasValidTotal, room.currentMembers, totalAmount]);
 
   function handleMemberAmountChange(memberId: UUID, amount: number | null) {
     setMemberAmounts((prev) => ({
@@ -126,6 +136,11 @@ export default function ExpenseSplitCreator({
             {displayError}
           </Alert>
         )}
+        {splitType === SplitType.BY_ITEM && !hasCompleteMemberList && (
+          <Alert variant="warning" title="Chưa có đủ danh sách thành viên">
+            Không thể chia hóa đơn theo từng người vì dữ liệu thành viên của phòng chưa đầy đủ. Hãy tải lại thông tin phòng hoặc chọn chế độ chia đều.
+          </Alert>
+        )}
 
         {/* Chế độ chia tiền */}
         <div className="space-y-2">
@@ -155,7 +170,7 @@ export default function ExpenseSplitCreator({
             disabled={isSubmitting}
             className="focus-ring h-11 w-full rounded-control border border-border bg-card px-3 text-body-sm font-semibold text-foreground transition-colors hover:border-primary/50"
           >
-            {members.map((member) => (
+            {payerOptions.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.username} {member.id === currentUserId ? '(Bạn)' : ''}
               </option>
@@ -179,7 +194,7 @@ export default function ExpenseSplitCreator({
           <div className="flex items-center justify-between rounded-card border border-border bg-muted/40 p-4 text-body-sm">
             <span className="flex items-center gap-2 text-muted-foreground">
               <Users size={16} className="text-primary" />
-              <span>Mỗi người ({members.length} thành viên):</span>
+              <span>Mỗi người ({room.currentMembers} thành viên):</span>
             </span>
             <strong className="text-heading-sm tabular-nums text-primary-strong">
               {formatVND(evenAmountPerMember)}đ
