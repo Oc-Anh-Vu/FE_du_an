@@ -152,7 +152,7 @@ export default function ActiveRoomList({
         <ul className="grid gap-4 sm:grid-cols-2" role="list">
           {rooms.map((room) => {
             const status = roomStatusMeta[room.status] ?? roomStatusMeta.OPEN;
-            const memberCount = room.members?.length ?? 1;
+            const memberCount = room.currentMembers ?? room.members?.length ?? 1;
 
             return (
               <li key={room.id}>

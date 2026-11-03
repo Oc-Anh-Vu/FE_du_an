@@ -37,7 +37,7 @@ export function buildExpenseCreateRequest({
   }
 
   const members = room.members ?? [];
-  if (!members.some((member) => member.id === payerId)) {
+  if (!members.some((member) => member.id === payerId) && room.host.id !== payerId) {
     throw new Error('Người trả tiền phải là thành viên của phòng.');
   }
 

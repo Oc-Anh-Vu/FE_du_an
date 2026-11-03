@@ -136,13 +136,6 @@ export function useSwipeActions(): UseSwipeActionsReturn {
       setIsSwiping(true);
       setError(null);
 
-      // Thêm ngay vào state tạm để chuyển sang thẻ bài tiếp theo
-      addMySwipe({
-        placeId: place.id,
-        placeName: place.name,
-        liked,
-      });
-
       try {
         await swipeService.swipe({
           roomId,
@@ -150,10 +143,20 @@ export function useSwipeActions(): UseSwipeActionsReturn {
           liked,
         });
 
+        addMySwipe({
+          placeId: place.id,
+          placeName: place.name,
+          liked,
+        });
         return true;
       } catch (err) {
         const errObj = err as { code?: number } | undefined;
         if (errObj?.code === ApiErrorCode.ALREADY_SWIPED) {
+          addMySwipe({
+            placeId: place.id,
+            placeName: place.name,
+            liked,
+          });
           return true;
         }
 
