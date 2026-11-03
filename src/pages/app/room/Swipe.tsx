@@ -2,9 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BarChart3, RefreshCw, Wifi, WifiOff } from 'lucide-react';
-import type { PlaceResponse, RoomSocketEvent } from '../../../types';
+import type { MemberLeftSocketData, PlaceResponse, RoomSocketEvent } from '../../../types';
 import { useSwipeActions } from '../../../features/swipe/useSwipeActions';
 import { useRoomActions } from '../../../features/room/useRoomActions';
+import { useRoomSession } from '../../../features/room/useRoomSession';
+import { useUserStore } from '../../../store/userStore';
 import { useUIStore } from '../../../store/uiStore';
 import { useSocket } from '../../../hooks/useSocket';
 import GroupSwipeDeck from '../../../features/swipe/GroupSwipeDeck';
@@ -21,6 +23,8 @@ export default function Swipe() {
   const { id: roomId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const showToast = useUIStore((state) => state.showToast);
+  const currentUserId = useUserStore((state) => state.currentUser?.id);
+  const { isRoomSessionEnabled, getSessionSignal, isSessionActive, endRoomSession } = useRoomSession(roomId);
 
   const {
     roomDeck,
@@ -34,23 +38,32 @@ export default function Swipe() {
     initializeSwipeSession,
     submitSwipeDecision,
     handleSwipeSocketEvent,
-  } = useSwipeActions();
+  } = useSwipeActions(endRoomSession);
 
   const { fetchRoomDetails } = useRoomActions();
   const hasRedirectedRef = useRef(false);
   const [showHearts, setShowHearts] = useState(false);
 
+  const initializeSession = useCallback(() => {
+    if (!roomId || !isSessionActive()) return;
+    void initializeSwipeSession(roomId, getSessionSignal());
+  }, [roomId, initializeSwipeSession, getSessionSignal, isSessionActive]);
+
   // Khởi tạo phiên quẹt thẻ khi mount
   useEffect(() => {
-    if (!roomId) return;
     hasRedirectedRef.current = false;
-    void initializeSwipeSession(roomId);
-  }, [roomId, initializeSwipeSession]);
+    initializeSession();
+  }, [initializeSession]);
 
   // Hàm kiểm tra trạng thái phòng qua REST làm fallback
   const syncRoomFallback = useCallback(async () => {
-    if (!roomId) return;
-    const result = await fetchRoomDetails(roomId);
+    if (!roomId || !isSessionActive()) return;
+    const result = await fetchRoomDetails(roomId, getSessionSignal());
+    if (!isSessionActive()) return;
+    if (!result.success) {
+      if (result.isNotFoundOrForbidden) endRoomSession(result.error);
+      return;
+    }
     if (result.success && result.room && !hasRedirectedRef.current) {
       if (result.room.status === 'CLOSED') {
         hasRedirectedRef.current = true;
@@ -61,12 +74,19 @@ export default function Swipe() {
         navigate(`/app/room/${roomId}/lobby`, { replace: true });
       }
     }
-  }, [roomId, fetchRoomDetails, navigate, showToast]);
+  }, [roomId, fetchRoomDetails, navigate, showToast, getSessionSignal, isSessionActive, endRoomSession]);
 
   // Tiếp nhận thông báo WebSocket từ /topic/rooms/{roomId}
   const handleSocketMessage = useCallback(
     (event: RoomSocketEvent) => {
-      if (!event || !event.type) return;
+      if (!event?.type || event.roomId !== roomId || !isSessionActive()) return;
+      if (event.type === 'MEMBER_LEFT') {
+        const leftData = event.data as MemberLeftSocketData;
+        if (currentUserId && leftData?.user?.id === currentUserId) {
+          endRoomSession('Bạn đã được mời ra khỏi phòng ăn.');
+          return;
+        }
+      }
 
       // Chuyển cho Feature Hook xử lý state
       handleSwipeSocketEvent(event);
@@ -78,6 +98,7 @@ export default function Swipe() {
         hasRedirectedRef.current = true;
         showToast('success', 'Tuyệt vời! Cả phòng đã khớp chung một quán ăn!');
         setTimeout(() => {
+          if (!isSessionActive()) return;
           navigate(`/app/room/${roomId}/summary`, { replace: true });
         }, 1500);
       } else if (event.type === 'ROOM_CLOSED' && !hasRedirectedRef.current) {
@@ -86,24 +107,26 @@ export default function Swipe() {
         navigate(`/app/room/${roomId}/summary`, { replace: true });
       }
     },
-    [handleSwipeSocketEvent, roomId, navigate, showToast],
+    [handleSwipeSocketEvent, roomId, navigate, showToast, currentUserId, isSessionActive, endRoomSession],
   );
 
   // Kích hoạt Hybrid Socket Client cho Bàn quẹt thẻ
   const { isConnected } = useSocket<RoomSocketEvent>({
     roomId,
+    enabled: isRoomSessionEnabled,
     onMessage: handleSocketMessage,
     onPoll: syncRoomFallback,
     pollIntervalMs: 4000,
+    pollImmediately: true,
   });
 
   // Xử lý quẹt thẻ
   const handleSwipe = useCallback(
     async (place: PlaceResponse, liked: boolean) => {
-      if (!roomId) return;
+      if (!roomId || !isSessionActive()) return;
       await submitSwipeDecision(roomId, place, liked);
     },
-    [roomId, submitSwipeDecision],
+    [roomId, submitSwipeDecision, isSessionActive],
   );
 
   const matchedPlace = currentRoom?.matchedPlace;
@@ -171,9 +194,7 @@ export default function Swipe() {
             <Button
               variant="primary"
               leftIcon={<RefreshCw className="h-4 w-4" />}
-              onClick={() => {
-                if (roomId) void initializeSwipeSession(roomId);
-              }}
+              onClick={initializeSession}
             >
               Thử lại
             </Button>
@@ -197,9 +218,7 @@ export default function Swipe() {
           error={error}
           onSwipe={handleSwipe}
           onViewResultsClick={() => navigate(`/app/room/${roomId}/summary`)}
-          onRetry={() => {
-            if (roomId) void initializeSwipeSession(roomId);
-          }}
+          onRetry={initializeSession}
         />
       )}
     </PageContainer>

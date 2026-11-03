@@ -180,9 +180,9 @@ export default function RoomExpenseList({
                   </div>
 
                   {/* Nút thao tác quản lý cấp hóa đơn */}
-                  {canManageExpense && (
+                  {(isPayer || canDelete) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      {!expense.fullyPaid && onPayAll && (
+                      {isPayer && !expense.fullyPaid && onPayAll && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -268,8 +268,8 @@ export default function RoomExpenseList({
                               </Button>
                             )}
 
-                            {/* Nút xác nhận đã trả cho Chủ nợ / Host */}
-                            {!split.paid && canManageExpense && onPaySplit && (
+                            {/* Nút xác nhận đã trả: CHỈ HIỂN THỊ CHO CHỦ NỢ (isPayer) */}
+                            {!split.paid && isPayer && onPaySplit && (
                               <Button
                                 size="sm"
                                 variant="outline"

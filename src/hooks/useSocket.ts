@@ -55,7 +55,7 @@ export function useSocket<TPayload = unknown>(
 
   const onMessageRef = useRef<SocketMessageHandler<TPayload> | undefined>(onMessage);
   const onPollRef = useRef<(() => void | Promise<void>) | undefined>(onPoll);
-  const isPollInFlightRef = useRef(false);
+  const pollingRef = useRef<{ active: boolean; inFlight: boolean; queued: boolean } | null>(null);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
@@ -72,18 +72,38 @@ export function useSocket<TPayload = unknown>(
         ? `/topic/rooms/${roomId}`
         : '';
 
+  // Mỗi phòng có lượt đồng bộ riêng; không chạy tiếp công việc của phòng đã unmount.
+  useEffect(() => {
+    const polling = { active: enabled, inFlight: false, queued: false };
+    pollingRef.current = polling;
+    return () => {
+      polling.active = false;
+      polling.queued = false;
+    };
+  }, [enabled, resolvedDestination]);
+
   const triggerPoll = useCallback(async (): Promise<void> => {
-    const pollFn = onPollRef.current;
-    if (!pollFn || isPollInFlightRef.current) {
+    const polling = pollingRef.current;
+    if (!onPollRef.current || !polling?.active) {
       return;
     }
-    isPollInFlightRef.current = true;
+    if (polling.inFlight) {
+      // Reconnect trong lúc REST đang chờ vẫn cần một lượt đồng bộ mới sau đó.
+      polling.queued = true;
+      return;
+    }
+    polling.inFlight = true;
     try {
-      await pollFn();
-    } catch {
-      // Lỗi mạng/API trong lượt polling định kỳ được xử lý tại hàm truyền vào
+      do {
+        polling.queued = false;
+        try {
+          await onPollRef.current?.();
+        } catch {
+          // Lỗi mạng/API được xử lý tại hàm truyền vào.
+        }
+      } while (polling.active && polling.queued);
     } finally {
-      isPollInFlightRef.current = false;
+      polling.inFlight = false;
     }
   }, []);
 
@@ -93,33 +113,26 @@ export function useSocket<TPayload = unknown>(
       return;
     }
 
-    socketClient.connect({
-      onConnect: () => {
-        setIsConnected(true);
-      },
-      onDisconnect: () => {
-        setIsConnected(false);
-      },
-      onError: () => {
-        setIsConnected(false);
-      },
+    let active = true;
+    // Đăng ký topic trước khi listener nhận trạng thái connected (kể cả singleton đã mở).
+    const unsubscribe = resolvedDestination
+      ? socketClient.subscribe<TPayload>(resolvedDestination, (payload, rawMessage) => {
+          if (active) onMessageRef.current?.(payload, rawMessage);
+        })
+      : () => {};
+    const unsubscribeConnection = socketClient.subscribeConnection((connected) => {
+      if (!active) return;
+      setIsConnected(connected);
+      if (connected) void triggerPoll();
     });
-
-    if (!resolvedDestination) {
-      return;
-    }
-
-    const unsubscribe = socketClient.subscribe<TPayload>(
-      resolvedDestination,
-      (payload, rawMessage) => {
-        onMessageRef.current?.(payload, rawMessage);
-      },
-    );
+    socketClient.connect();
 
     return () => {
+      active = false;
       unsubscribe();
+      unsubscribeConnection();
     };
-  }, [enabled, isRealtimeEnabled, resolvedDestination]);
+  }, [enabled, isRealtimeEnabled, resolvedDestination, triggerPoll]);
 
   // Kích hoạt REST Polling định kỳ (3000ms - 4000ms) khi WebSocket chưa bật ([PENDING_BACKEND]) hoặc chưa kết nối
   const shouldUseRestPolling = Boolean(
@@ -180,7 +193,7 @@ export function useSocket<TPayload = unknown>(
 
   return {
     isRealtimeEnabled,
-    isConnected,
+    isConnected: enabled && isRealtimeEnabled && isConnected,
     isPolling: shouldUseRestPolling,
     subscribe,
     publish,
