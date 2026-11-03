@@ -106,8 +106,8 @@ export default function Swipe() {
   // Xử lý quẹt thẻ
   const handleSwipe = useCallback(
     async (place: PlaceResponse, liked: boolean) => {
-      if (!roomId) return;
-      await submitSwipeDecision(roomId, place, liked);
+      if (!roomId) return false;
+      return submitSwipeDecision(roomId, place, liked);
     },
     [roomId, submitSwipeDecision],
   );
@@ -176,7 +176,7 @@ export default function Swipe() {
         }
       />
 
-      {currentRoom?.id === roomId && isCurrentUserHost && currentRoom.status !== 'CLOSED' && (
+      {currentRoom && currentRoom.id === roomId && isCurrentUserHost && currentRoom.status !== 'CLOSED' && (
         <RoomHostControls
           room={currentRoom}
           isHost={isCurrentUserHost}

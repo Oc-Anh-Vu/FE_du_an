@@ -128,12 +128,8 @@ export default function GroupSwipeDeck({
           <SwipeCardItem
             key={currentPlace.id}
             place={currentPlace}
-            onSwipeLeft={async (p) => {
-              await onSwipe(p, false);
-            }}
-            onSwipeRight={async (p) => {
-              await onSwipe(p, true);
-            }}
+            onSwipeLeft={(p) => onSwipe(p, false)}
+            onSwipeRight={(p) => onSwipe(p, true)}
             disabled={isSwiping}
           />
           <p className="text-center text-caption font-semibold text-muted-foreground">

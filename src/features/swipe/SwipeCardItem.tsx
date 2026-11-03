@@ -6,8 +6,8 @@ import { FloatingHearts } from '../../components/ui/effects/FloatingHearts';
 
 export interface SwipeCardItemProps {
   place: PlaceResponse;
-  onSwipeLeft: (place: PlaceResponse) => unknown;
-  onSwipeRight: (place: PlaceResponse) => unknown;
+  onSwipeLeft: (place: PlaceResponse) => Promise<boolean | void> | boolean | void;
+  onSwipeRight: (place: PlaceResponse) => Promise<boolean | void> | boolean | void;
   disabled?: boolean;
 }
 
@@ -36,14 +36,19 @@ export default function SwipeCardItem({
   async function handleSwipeLeft() {
     if (disabled || direction) return;
     setDirection('left');
-    await onSwipeLeft(place);
+    const succeeded = await onSwipeLeft(place);
+    if (succeeded === false) setDirection(null);
   }
 
   async function handleSwipeRight() {
     if (disabled || direction) return;
-    setHeartsTrigger((prev) => prev + 1);
     setDirection('right');
-    await onSwipeRight(place);
+    const succeeded = await onSwipeRight(place);
+    if (succeeded === false) {
+      setDirection(null);
+      return;
+    }
+    setHeartsTrigger((prev) => prev + 1);
   }
 
   return (
