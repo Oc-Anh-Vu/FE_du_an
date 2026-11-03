@@ -21,7 +21,7 @@ export interface UseBillingActionsReturn {
   isLoading: boolean;
   error: string | null;
   fetchMyUnpaidDebts: () => Promise<ExpenseSplitResponse[]>;
-  fetchExpensesByRoom: (roomId: UUID) => Promise<ExpenseResponse[]>;
+  fetchExpensesByRoom: (roomId: UUID, silent?: boolean) => Promise<ExpenseResponse[]>;
   buildAndCreateExpense: (params: {
     room: RoomResponse;
     payerId: UUID;
@@ -97,8 +97,10 @@ export function useBillingActions(): UseBillingActionsReturn {
 
   /** Lấy danh sách hóa đơn theo phòng ăn */
   const fetchExpensesByRoom = useCallback(
-    async (roomId: UUID): Promise<ExpenseResponse[]> => {
-      setIsLoading(true);
+    async (roomId: UUID, silent = false): Promise<ExpenseResponse[]> => {
+      if (!silent) {
+        setIsLoading(true);
+      }
       setError(null);
       try {
         const expenses = await expenseService.getExpensesByRoom(roomId);
@@ -111,11 +113,15 @@ export function useBillingActions(): UseBillingActionsReturn {
 
         return validExpenses;
       } catch (err) {
-        const message = getErrorMessage(err, 'Không thể tải danh sách hóa đơn của phòng.');
-        setError(message);
+        if (!silent) {
+          const message = getErrorMessage(err, 'Không thể tải danh sách hóa đơn của phòng.');
+          setError(message);
+        }
         return [];
       } finally {
-        setIsLoading(false);
+        if (!silent) {
+          setIsLoading(false);
+        }
       }
     },
     [setRoomExpenses],

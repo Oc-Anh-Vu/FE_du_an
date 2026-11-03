@@ -14,6 +14,7 @@ import { roomService } from '../../services/room.service';
 import { swipeService } from '../../services/swipe.service';
 import { useRoomStore } from '../../store/roomStore';
 import { useUIStore } from '../../store/uiStore';
+import { isRoomAccessError } from '../room/roomAccess';
 
 export interface SwipeReactionEvent {
   userId: string;
@@ -33,7 +34,7 @@ export interface UseSwipeActionsReturn {
   isSwiping: boolean;
   isSelectingPlace: boolean;
   error: string | null;
-  initializeSwipeSession: (roomId: UUID) => Promise<void>;
+  initializeSwipeSession: (roomId: UUID, signal?: AbortSignal) => Promise<void>;
   submitSwipeDecision: (roomId: UUID, place: PlaceResponse, liked: boolean) => Promise<boolean>;
   fetchRoomResults: (roomId: UUID) => Promise<RoomPlaceResultResponse[]>;
   hostSelectWinningPlace: (roomId: UUID, placeId: UUID) => Promise<boolean>;
@@ -66,7 +67,7 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-export function useSwipeActions(): UseSwipeActionsReturn {
+export function useSwipeActions(onAccessLost?: (message: string) => void): UseSwipeActionsReturn {
   const roomDeck = useRoomStore((state) => state.roomDeck);
   const mySwipes = useRoomStore((state) => state.mySwipes);
   const swipeResults = useRoomStore((state) => state.swipeResults);
@@ -105,29 +106,39 @@ export function useSwipeActions(): UseSwipeActionsReturn {
 
   /** Khởi tạo phiên quẹt: tải bộ bài (tự tạo nếu trống) + lịch sử quẹt của người dùng */
   const initializeSwipeSession = useCallback(
-    async (roomId: UUID): Promise<void> => {
+    async (roomId: UUID, signal?: AbortSignal): Promise<void> => {
+      if (signal?.aborted) return;
       setIsInitializing(true);
       setError(null);
       try {
+        const roomDetails = await roomService.getRoomDetails(roomId);
+        if (signal?.aborted) return;
         let deck = await roomService.getRoomDeck(roomId);
+        if (signal?.aborted) return;
         if (!deck || deck.length === 0) {
           deck = await roomService.generateDeck(roomId);
+          if (signal?.aborted) return;
         }
-        setRoomDeck(deck);
-
         const myHistory = await swipeService.getMySwipesInRoom(roomId);
-        setMySwipes(myHistory);
+        if (signal?.aborted) return;
 
-        const roomDetails = await roomService.getRoomDetails(roomId);
+        // Chỉ ghi dữ liệu khi toàn bộ lượt tải vẫn thuộc phiên đang hoạt động.
         setCurrentRoom(roomDetails);
+        setRoomDeck(deck);
+        setMySwipes(myHistory);
       } catch (err) {
+        if (signal?.aborted) return;
         const message = getErrorMessage(err, 'Không thể tải bộ bài phòng ăn.');
+        if (isRoomAccessError(err) && onAccessLost) {
+          onAccessLost(message);
+          return;
+        }
         setError(message);
       } finally {
-        setIsInitializing(false);
+        if (!signal?.aborted) setIsInitializing(false);
       }
     },
-    [setCurrentRoom, setMySwipes, setRoomDeck],
+    [setCurrentRoom, setMySwipes, setRoomDeck, onAccessLost],
   );
 
   /** Gửi quyết định quẹt thích/không thích một quán ăn */
@@ -161,6 +172,10 @@ export function useSwipeActions(): UseSwipeActionsReturn {
         }
 
         const message = getErrorMessage(err, 'Không thể ghi nhận lượt quẹt thẻ.');
+        if (isRoomAccessError(err) && onAccessLost) {
+          onAccessLost(message);
+          return false;
+        }
         setError(message);
         useUIStore.getState().showToast('danger', message);
         return false;
@@ -168,7 +183,7 @@ export function useSwipeActions(): UseSwipeActionsReturn {
         setIsSwiping(false);
       }
     },
-    [addMySwipe],
+    [addMySwipe, onAccessLost],
   );
 
   /** Lấy bảng xếp hạng kết quả bình chọn của phòng */

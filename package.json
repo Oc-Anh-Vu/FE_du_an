@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:realtime": "node --test tests/room-realtime.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

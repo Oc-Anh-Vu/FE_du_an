@@ -169,6 +169,12 @@ export function useMatchmakingActions(): UseMatchmakingActionsReturn {
       setIsQueueing(true);
       setError(null);
       try {
+        // Hủy bỏ bất kỳ trạng thái/kết quả ghép cũ còn sót lại trong Redis trước khi tạo yêu cầu mới
+        try {
+          await matchmakingService.cancelMatch();
+        } catch {
+          // Bỏ qua nếu không có phiên ghép trước đó
+        }
         const response = await matchmakingService.findOrQueueMatch(request);
         setMatchmakingStatus(response);
         return response;

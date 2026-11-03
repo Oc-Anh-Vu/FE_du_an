@@ -69,7 +69,7 @@ export default function Match() {
       if (status) {
         if (status.status === 'MATCHED' && status.roomCode) {
           showToast('success', `Đã tìm thấy phòng ghép: ${status.roomCode}!`);
-          navigate(`/app/room/${status.roomCode}/lobby`);
+          navigate(`/app/room/${status.roomId || status.roomCode}/lobby`);
         } else {
           showToast('info', 'Đã tham gia hàng đợi quét Radar thành công');
           navigate('/app/room/queue');

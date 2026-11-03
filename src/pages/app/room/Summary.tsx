@@ -1,8 +1,11 @@
 // Màn hình Tổng kết kết quả quẹt thẻ, Bầu chọn chốt quán & Chia tiền VietQR
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, PlusCircle, Receipt, RefreshCw } from 'lucide-react';
-import type { ExpenseSplitResponse, UUID } from '../../../types';
+import { ArrowLeft, PlusCircle, Receipt, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import type { ExpenseResponse, ExpenseSplitResponse, UUID } from '../../../types';
+import { useRoomSession } from '../../../features/room/useRoomSession';
+import { useSocket } from '../../../hooks/useSocket';
+import { useBillingStore } from '../../../store/billingStore';
 import { useRoomActions } from '../../../features/room/useRoomActions';
 import { useSwipeActions } from '../../../features/swipe/useSwipeActions';
 import { useBillingActions } from '../../../features/billing/useBillingActions';
@@ -26,10 +29,13 @@ export default function Summary() {
   const showToast = useUIStore((state) => state.showToast);
   const currentUser = useUserStore((state) => state.currentUser);
 
-  // Room Actions
+  // Quản lý session của phòng
+  const { isRoomSessionEnabled, isSessionActive } = useRoomSession(roomId);
+
+  // 1. Room Actions
   const { currentRoom, isCurrentUserHost, fetchRoomDetails } = useRoomActions();
 
-  // Swipe Actions
+  // 2. Swipe Actions
   const {
     swipeResults,
     isSelectingPlace,
@@ -37,7 +43,7 @@ export default function Summary() {
     hostSelectWinningPlace,
   } = useSwipeActions();
 
-  // Billing Actions
+  // 3. Billing Actions
   const {
     roomExpenses,
     isLoading: isBillingLoading,
@@ -71,6 +77,65 @@ export default function Summary() {
   useEffect(() => {
     void loadAllRoomData();
   }, [loadAllRoomData]);
+
+  // Tiếp nhận sự kiện hóa đơn & kết quả phòng thời gian thực từ STOMP Broker (/topic/rooms/{roomId})
+  const handleSocketMessage = useCallback(
+    (event: any) => {
+      if (!event || event.roomId !== roomId || !isSessionActive()) return;
+
+      if (event.type === 'EXPENSE_CREATED') {
+        const created = event.data as ExpenseResponse;
+        if (created?.id) {
+          useBillingStore.getState().upsertRoomExpense(created);
+          showToast('info', 'Chủ phòng vừa tạo hóa đơn chia tiền mới!');
+        } else if (roomId) {
+          void fetchExpensesByRoom(roomId, true);
+        }
+      } else if (event.type === 'EXPENSE_UPDATED') {
+        const updated = event.data as ExpenseResponse;
+        if (updated?.id) {
+          useBillingStore.getState().upsertRoomExpense(updated);
+        } else if (roomId) {
+          void fetchExpensesByRoom(roomId, true);
+        }
+      } else if (event.type === 'EXPENSE_DELETED') {
+        const expenseId = event.data?.expenseId || event.data?.id;
+        if (expenseId) {
+          useBillingStore.getState().removeRoomExpense(expenseId);
+          showToast('info', 'Hóa đơn chia tiền đã bị xóa.');
+        } else if (roomId) {
+          void fetchExpensesByRoom(roomId, true);
+        }
+      } else if (event.type === 'MATCH_FOUND') {
+        if (roomId) {
+          void fetchRoomDetails(roomId);
+          void fetchRoomResults(roomId);
+        }
+      }
+    },
+    [roomId, isSessionActive, showToast, fetchExpensesByRoom, fetchRoomDetails, fetchRoomResults],
+  );
+
+  // Kích hoạt WebSocket STOMP
+  const { isConnected } = useSocket({
+    roomId,
+    enabled: isRoomSessionEnabled,
+    onMessage: handleSocketMessage,
+  });
+
+  // Tự động đồng bộ ngầm định kỳ 3000ms (Fallback Polling) để đảm bảo hai bên luôn khớp trạng thái
+  useEffect(() => {
+    if (!roomId || !isRoomSessionEnabled) return;
+
+    const intervalId = window.setInterval(() => {
+      if (!isSessionActive()) return;
+      void fetchExpensesByRoom(roomId, true);
+    }, 3000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [roomId, isRoomSessionEnabled, isSessionActive, fetchExpensesByRoom]);
 
   // Host chọn quán chốt thủ công
   const handleSelectWinningPlace = useCallback(
@@ -136,6 +201,15 @@ export default function Summary() {
   );
 
   const hasExpenses = roomExpenses.length > 0;
+
+  // Tự động đóng modal tạo nếu thành viên khác đã tạo thành công
+  useEffect(() => {
+    if (hasExpenses && showCreateExpenseModal) {
+      setShowCreateExpenseModal(false);
+      showToast('info', 'Hóa đơn đã được tạo bởi thành viên khác.');
+    }
+  }, [hasExpenses, showCreateExpenseModal, showToast]);
+
   const isHost = Boolean(isCurrentUserHost || (currentRoom && currentUser && currentRoom.host.id === currentUser.id));
 
   return (
@@ -145,6 +219,21 @@ export default function Summary() {
         subtitle="Xem quán ăn chiến thắng, bảng bình chọn nhóm và tiến hành chia tiền hóa đơn VietQR."
         action={
           <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold ${
+                isConnected
+                  ? 'bg-success-soft text-success-soft-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+              title={
+                isConnected
+                  ? 'Đang kết nối thời gian thực (Realtime Active)'
+                  : 'Đang đồng bộ thích ứng (Fallback Polling)'
+              }
+            >
+              {isConnected ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+              {isConnected ? 'Realtime' : 'Đồng bộ'}
+            </span>
             <Button
               variant="ghost"
               size="sm"

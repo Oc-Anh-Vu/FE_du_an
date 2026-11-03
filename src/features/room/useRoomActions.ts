@@ -10,9 +10,11 @@ import type {
 } from '../../types';
 import { ApiErrorCode, RoomStatus } from '../../types';
 import { roomService } from '../../services/room.service';
+import { matchmakingService } from '../../services/matchmaking.service';
 import { useRoomStore } from '../../store/roomStore';
 import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
+import { isRoomAccessError } from './roomAccess';
 
 export interface UseRoomActionsReturn {
   currentRoom: RoomResponse | null;
@@ -23,6 +25,7 @@ export interface UseRoomActionsReturn {
   fetchMyActiveRooms: () => Promise<RoomResponse[]>;
   fetchRoomDetails: (
     roomId: UUID,
+    signal?: AbortSignal,
   ) => Promise<{ success: boolean; room?: RoomResponse; isNotFoundOrForbidden?: boolean; error?: string }>;
   createNewRoom: (payload: CreateRoomRequest) => Promise<RoomResponse | null>;
   joinRoomByCode: (roomCode: string) => Promise<RoomResponse | null>;
@@ -115,26 +118,25 @@ export function useRoomActions(): UseRoomActionsReturn {
   const fetchRoomDetails = useCallback(
     async (
       roomId: UUID,
+      signal?: AbortSignal,
     ): Promise<{ success: boolean; room?: RoomResponse; isNotFoundOrForbidden?: boolean; error?: string }> => {
+      if (signal?.aborted) return { success: false };
       setIsLoading(true);
       setError(null);
       try {
         const room = await roomService.getRoomById(roomId);
+        if (signal?.aborted) return { success: false };
         setCurrentRoom(room);
         return { success: true, room };
       } catch (err) {
+        if (signal?.aborted) return { success: false };
         const message = getErrorMessage(err, 'Không thể tải thông tin phòng ăn.');
         setError(message);
-        const errObj = err as { code?: number; status?: number } | undefined;
-        const isNotFoundOrForbidden =
-          errObj?.code === ApiErrorCode.ROOM_NOT_FOUND ||
-          errObj?.code === ApiErrorCode.NOT_ROOM_MEMBER ||
-          errObj?.status === 404 ||
-          errObj?.status === 403;
+        const isNotFoundOrForbidden = isRoomAccessError(err);
 
         return { success: false, isNotFoundOrForbidden, error: message };
       } finally {
-        setIsLoading(false);
+        if (!signal?.aborted) setIsLoading(false);
       }
     },
     [setCurrentRoom],
@@ -243,6 +245,11 @@ export function useRoomActions(): UseRoomActionsReturn {
       setError(null);
       try {
         await roomService.leaveRoom(roomId);
+        try {
+          await matchmakingService.cancelMatch();
+        } catch {
+          // Bỏ qua nếu người dùng không tham gia qua hàng đợi
+        }
         setCurrentRoom(null);
         useUIStore.getState().showToast('info', 'Bạn đã rời khỏi phòng ăn.');
         return true;
@@ -287,6 +294,11 @@ export function useRoomActions(): UseRoomActionsReturn {
       setError(null);
       try {
         await roomService.deleteRoom(roomId);
+        try {
+          await matchmakingService.cancelMatch();
+        } catch {
+          // Bỏ qua nếu không có phiên ghép
+        }
         setCurrentRoom(null);
         setActiveRooms(activeRooms.filter((r) => r.id !== roomId));
         useUIStore.getState().showToast('success', 'Đã giải tán phòng ăn.');

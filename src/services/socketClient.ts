@@ -1,5 +1,5 @@
 // Singleton quản lý kết nối STOMP/SockJS ([PENDING_BACKEND] - Kiểm soát qua VITE_ENABLE_WS === 'true')
-import { Client, type IFrame, type IMessage, type StompSubscription } from '@stomp/stompjs';
+import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { API_BASE_URL, getAccessToken } from './apiClient';
 
@@ -11,9 +11,6 @@ export interface SocketConnectOptions {
   url?: string;
   useSockJS?: boolean;
   reconnectDelayMs?: number;
-  onConnect?: (frame: IFrame) => void;
-  onDisconnect?: () => void;
-  onError?: (message: string) => void;
 }
 
 interface ManagedSubscription {
@@ -71,6 +68,27 @@ class SocketClient {
   private connected = false;
   private subSequence = 0;
   private readonly subscriptions = new Map<string, ManagedSubscription>();
+  private readonly connectionListeners = new Set<(connected: boolean) => void>();
+
+  public subscribeConnection(listener: (connected: boolean) => void): SocketUnsubscribe {
+    this.connectionListeners.add(listener);
+    listener(this.isConnected());
+    return () => {
+      this.connectionListeners.delete(listener);
+    };
+  }
+
+  private notifyConnection(connected: boolean): void {
+    for (const listener of this.connectionListeners) {
+      listener(connected);
+    }
+  }
+
+  private handleDisconnected(): void {
+    this.connected = false;
+    this.clearActiveStompHandles();
+    this.notifyConnection(false);
+  }
 
   // Kiểm tra cờ bật/tắt WebSocket qua biến môi trường VITE_ENABLE_WS === 'true'
   public isEnabled(): boolean {
@@ -118,26 +136,29 @@ class SocketClient {
         : {
             brokerURL: toWebSocketBrokerUrl(targetUrl),
           }),
-      onConnect: (frame: IFrame) => {
+      onConnect: () => {
+        if (this.client !== client) return;
         this.connected = true;
         this.attachPendingSubscriptions();
-        options.onConnect?.(frame);
+        this.notifyConnection(true);
       },
       onDisconnect: () => {
-        this.connected = false;
-        this.clearActiveStompHandles();
-        options.onDisconnect?.();
+        if (this.client !== client) return;
+        this.handleDisconnected();
       },
       onWebSocketClose: () => {
-        this.connected = false;
-        this.clearActiveStompHandles();
+        if (this.client !== client) return;
+        this.handleDisconnected();
       },
-      onStompError: (frame: IFrame) => {
-        const errorMessage = frame.headers?.message || frame.body || 'Lỗi giao thức STOMP.';
-        options.onError?.(errorMessage);
+      onStompError: () => {
+        if (this.client !== client) return;
+        this.connected = false;
+        this.notifyConnection(false);
       },
       onWebSocketError: () => {
-        options.onError?.('Không thể thiết lập kết nối WebSocket tới máy chủ.');
+        if (this.client !== client) return;
+        this.connected = false;
+        this.notifyConnection(false);
       },
     });
 
@@ -146,13 +167,14 @@ class SocketClient {
     try {
       client.activate();
     } catch {
-      this.connected = false;
+      this.handleDisconnected();
     }
   }
 
   // Ngắt kết nối và hủy toàn bộ STOMP subscriptions đang mở (No-Op an toàn khi chưa kết nối)
   public disconnect(): void {
     this.connected = false;
+    this.notifyConnection(false);
 
     for (const entry of this.subscriptions.values()) {
       if (entry.stompSub) {

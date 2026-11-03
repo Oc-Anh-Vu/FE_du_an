@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import type { MemberLeftSocketData, RoomSocketEvent, UUID } from '../../../types';
 import { useRoomActions } from '../../../features/room/useRoomActions';
+import { useRoomSession } from '../../../features/room/useRoomSession';
 import { useUserStore } from '../../../store/userStore';
 import { useUIStore } from '../../../store/uiStore';
 import { useSocket } from '../../../hooks/useSocket';
@@ -24,6 +25,7 @@ export default function Lobby() {
   const navigate = useNavigate();
   const showToast = useUIStore((state) => state.showToast);
   const currentUser = useUserStore((state) => state.currentUser);
+  const { isRoomSessionEnabled, getSessionSignal, isSessionActive, endRoomSession } = useRoomSession(roomId);
 
   const {
     currentRoom,
@@ -44,15 +46,12 @@ export default function Lobby() {
 
   // Xử lý nạp chi tiết phòng và đồng bộ trạng thái
   const syncRoomState = useCallback(async () => {
-    if (!roomId) return;
-    const result = await fetchRoomDetails(roomId);
+    if (!roomId || !isSessionActive()) return;
+    const result = await fetchRoomDetails(roomId, getSessionSignal());
+    if (!isSessionActive()) return;
 
     if (!result.success) {
-      if (result.isNotFoundOrForbidden && !hasRedirectedRef.current) {
-        hasRedirectedRef.current = true;
-        showToast('danger', result.error || 'Phòng ăn không tồn tại hoặc bạn không phải thành viên.');
-        navigate('/app/room', { replace: true });
-      }
+      if (result.isNotFoundOrForbidden) endRoomSession(result.error);
       return;
     }
 
@@ -67,7 +66,7 @@ export default function Lobby() {
         navigate(`/app/room/${roomId}/summary`, { replace: true });
       }
     }
-  }, [roomId, fetchRoomDetails, navigate, showToast]);
+  }, [roomId, fetchRoomDetails, navigate, getSessionSignal, isSessionActive, endRoomSession]);
 
   // Nạp lần đầu khi mount
   useEffect(() => {
@@ -78,7 +77,14 @@ export default function Lobby() {
   // Tiếp nhận sự kiện thời gian thực từ STOMP Broker (/topic/rooms/{roomId})
   const handleSocketMessage = useCallback(
     (event: RoomSocketEvent) => {
-      if (!event || !event.type) return;
+      if (!event?.type || event.roomId !== roomId || !isSessionActive()) return;
+      if (event.type === 'MEMBER_LEFT') {
+        const leftData = event.data as MemberLeftSocketData;
+        if (currentUser?.id && leftData?.user?.id === currentUser.id) {
+          endRoomSession('Bạn đã được mời ra khỏi phòng ăn.');
+          return;
+        }
+      }
 
       // Cập nhật state thông qua Feature Hook
       handleRoomSocketEvent(event);
@@ -91,21 +97,15 @@ export default function Lobby() {
         hasRedirectedRef.current = true;
         showToast('warning', 'Phòng ăn đã được đóng.');
         navigate(`/app/room/${roomId}/summary`, { replace: true });
-      } else if (event.type === 'MEMBER_LEFT') {
-        const leftData = event.data as MemberLeftSocketData;
-        if (leftData?.user?.id === currentUser?.id && !hasRedirectedRef.current) {
-          hasRedirectedRef.current = true;
-          showToast('warning', 'Bạn đã được mời ra khỏi phòng ăn.');
-          navigate('/app/room', { replace: true });
-        }
       }
     },
-    [handleRoomSocketEvent, roomId, currentUser?.id, navigate, showToast],
+    [handleRoomSocketEvent, roomId, currentUser, navigate, showToast, isSessionActive, endRoomSession],
   );
 
   // Kích hoạt Hybrid Socket: Lắng nghe STOMP Realtime, tự động kích hoạt Polling (3000ms) làm fallback an toàn
   const { isConnected } = useSocket<RoomSocketEvent>({
     roomId,
+    enabled: isRoomSessionEnabled,
     onMessage: handleSocketMessage,
     onPoll: syncRoomState,
     pollIntervalMs: 3000,
