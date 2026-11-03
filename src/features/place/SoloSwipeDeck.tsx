@@ -1,10 +1,13 @@
 // Bộ bài quẹt thẻ cá nhân chế độ "Ăn một mình" (Client-side Solo Mode): duyệt thuần Client trên mảng places, phát sự kiện onLike, onSkip, onReset
+import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Heart, RotateCcw, X } from 'lucide-react';
 import { PlaceCard } from '../../components/ui/display/PlaceCard';
 import { EmptyState } from '../../components/ui/feedback/EmptyState';
 import { Skeleton } from '../../components/ui/feedback/Skeleton';
 import { Button } from '../../components/ui/form/Button';
 import { Stack } from '../../components/layout/Stack';
+import { FloatingHearts } from '../../components/ui/effects/FloatingHearts';
 import type { PlaceResponse } from '../../types/api';
 import { cn } from '../../utils/cn';
 import { getPlaceDistanceKm, type GeoCoordinates } from '../../utils/geoCalculator';
@@ -33,6 +36,9 @@ export function SoloSwipeDeck({
   onReset,
   className,
 }: SoloSwipeDeckProps) {
+  const [direction, setDirection] = useState<'left' | 'right' | null>(null);
+  const [heartsTrigger, setHeartsTrigger] = useState(0);
+
   if (isLoading) {
     return (
       <div className={cn('mx-auto max-w-lg space-y-4 p-4', className)}>
@@ -90,9 +96,24 @@ export function SoloSwipeDeck({
     longitude: currentPlace.longitude,
   });
 
-  const handleLike = () => {
-    onLike?.(currentPlace);
-    onMatch?.(currentPlace);
+  const handleSwipe = (swipeDirection: 'left' | 'right') => {
+    if (direction) return;
+    setDirection(swipeDirection);
+  };
+
+  const handleSwipeAnimationComplete = () => {
+    if (!direction) return;
+
+    const swipedRight = direction === 'right';
+    setDirection(null);
+
+    if (swipedRight) {
+      onLike?.(currentPlace);
+      onMatch?.(currentPlace);
+      setHeartsTrigger((previous) => previous + 1);
+    } else {
+      onSkip();
+    }
   };
 
   return (
@@ -106,12 +127,40 @@ export function SoloSwipeDeck({
       </div>
 
       {/* Thẻ địa điểm hiện tại */}
-      <div className="w-full shadow-raised rounded-card transition-all">
-        <PlaceCard
-          place={toPlaceCardItem(currentPlace)}
-          distanceKm={distanceKm}
-          layout="vertical"
-        />
+      <div className="relative w-full touch-pan-y">
+        <FloatingHearts trigger={heartsTrigger} count={8} />
+        <motion.div
+          key={currentPlace.id}
+          aria-label={`Thẻ quán ăn: ${currentPlace.name}`}
+          className="w-full shadow-raised rounded-card"
+          drag={direction ? false : 'x'}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.8}
+          onDragEnd={(_, info) => {
+            if (info.offset.x > 90) {
+              handleSwipe('right');
+            } else if (info.offset.x < -90) {
+              handleSwipe('left');
+            }
+          }}
+          animate={
+            direction
+              ? {
+                  opacity: 0,
+                  x: direction === 'right' ? 400 : -400,
+                  rotate: direction === 'right' ? 15 : -15,
+                }
+              : { opacity: 1, x: 0, rotate: 0 }
+          }
+          transition={{ duration: 0.25 }}
+          onAnimationComplete={handleSwipeAnimationComplete}
+        >
+          <PlaceCard
+            place={toPlaceCardItem(currentPlace)}
+            distanceKm={distanceKm}
+            layout="vertical"
+          />
+        </motion.div>
       </div>
 
       {/* Cụm nút Bỏ qua & Thích */}
@@ -122,7 +171,8 @@ export function SoloSwipeDeck({
           fullWidth
           className="h-14 font-bold text-body-lg"
           leftIcon={<X aria-hidden="true" size={22} />}
-          onClick={onSkip}
+          onClick={() => handleSwipe('left')}
+          disabled={direction !== null}
           aria-label={`Bỏ qua quán ${currentPlace.name}`}
         >
           Bỏ qua
@@ -133,7 +183,8 @@ export function SoloSwipeDeck({
           fullWidth
           className="h-14 font-bold text-body-lg shadow-cta"
           leftIcon={<Heart aria-hidden="true" size={22} className="fill-current" />}
-          onClick={handleLike}
+          onClick={() => handleSwipe('right')}
+          disabled={direction !== null}
           aria-label={`Thích quán ${currentPlace.name}`}
         >
           Thích quán này
